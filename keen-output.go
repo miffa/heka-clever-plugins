@@ -7,6 +7,10 @@ import (
 
 type KeenOutput struct{}
 
+func (ko *KeenOutput) Init(config interface{}) error {
+	return nil
+}
+
 func (ko *KeenOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (err error) {
 	var (
 		// e    error
