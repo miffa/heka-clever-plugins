@@ -2,7 +2,6 @@ package heka_clever_plugins
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/inconshreveable/go-keen"
 	"github.com/mozilla-services/heka/pipeline"
@@ -34,19 +33,22 @@ func (ko *KeenOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) err
 	)
 
 	for pack = range or.InChan() {
-		value, ok := pack.Message.GetFieldValue("Data")
+		data, ok := pack.Message.GetFieldValue("Data")
 		if !ok {
-			return errors.New("Could not get field value 'Data'")
+			or.LogError(fmt.Errorf("Could not get field value 'Data' from message %#v", data))
+			continue
 		}
 
 		event := make(map[string]interface{})
-		err = json.Unmarshal([]byte(value.(string)), &event)
+		err = json.Unmarshal([]byte(data.(string)), &event)
 		if err != nil {
 			or.LogError(err)
+			continue
 		}
 		err = ko.client.AddEvent("job-finished", event)
 		if err != nil {
 			or.LogError(err)
+			continue
 		}
 		pack.Recycle()
 	}
