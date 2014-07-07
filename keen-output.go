@@ -1,13 +1,28 @@
 package heka_clever_plugins
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/inconshreveable/go-keen"
 	"github.com/mozilla-services/heka/pipeline"
 )
 
-type KeenOutput struct{}
+type KeenOutput struct {
+	client *keen.Client
+}
 
-func (ko *KeenOutput) Init(config interface{}) error {
+type KeenOutputConfig struct {
+	ApiKey       string `toml:"api_key"`
+	ProjectToken string `toml:"project_token"`
+}
+
+func (ko *KeenOutput) ConfigStruct() interface{} {
+	return &KeenOutputConfig{}
+}
+
+func (ko *KeenOutput) Init(rawConf interface{}) error {
+	config := rawConf.(*KeenOutputConfig)
+	ko.client = &keen.Client{ApiKey: config.ApiKey, ProjectToken: config.ProjectToken}
 	return nil
 }
 
@@ -18,7 +33,18 @@ func (ko *KeenOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) (er
 	)
 
 	for pack = range or.InChan() {
-		fmt.Println(pack.Message.Payload)
+		value, ok := pack.Message.GetFieldValue("Data")
+		event := make(map[string]interface{})
+		err = json.Unmarshal([]byte(value.(string)), &event)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("%#v %#v\n", ok, event)
+		err = ko.client.AddEvent("job-finished", event)
+		if err != nil {
+			panic(err)
+		}
+		pack.Recycle()
 	}
 	return
 }
