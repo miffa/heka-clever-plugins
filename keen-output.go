@@ -33,7 +33,7 @@ func (ko *KeenOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) err
 	)
 
 	for pack = range or.InChan() {
-		data, ok := pack.Message.GetFieldValue("Data")
+		data, ok := pack.Message.GetFieldValue("KeenIO")
 		if !ok {
 			or.LogError(fmt.Errorf("Could not get field value 'Data' from message %#v", data))
 			continue
