@@ -11,12 +11,14 @@ type KeenClient interface {
 }
 
 type KeenOutput struct {
-	client KeenClient
+	client     KeenClient
+	collection string
 }
 
 type KeenOutputConfig struct {
 	ApiKey       string `toml:"api_key"`
 	ProjectToken string `toml:"project_token"`
+	Collection   string `toml:"collection_name"`
 }
 
 func (ko *KeenOutput) ConfigStruct() interface{} {
@@ -26,6 +28,7 @@ func (ko *KeenOutput) ConfigStruct() interface{} {
 func (ko *KeenOutput) Init(rawConf interface{}) error {
 	config := rawConf.(*KeenOutputConfig)
 	ko.client = &keen.Client{ApiKey: config.ApiKey, ProjectToken: config.ProjectToken}
+	ko.collection = config.Collection
 	return nil
 }
 
@@ -40,7 +43,7 @@ func (ko *KeenOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) err
 			or.LogError(err)
 			continue
 		}
-		err = ko.client.AddEvent("job-finished", event)
+		err = ko.client.AddEvent(ko.collection, event)
 		if err != nil {
 			or.LogError(err)
 			continue

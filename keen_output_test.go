@@ -69,7 +69,7 @@ func KeenOutputSpec(c gs.Context) {
 		for _, test := range successTests {
 			oth := NewOutputTestHelper(universalT, ctrl)
 			output := new(KeenOutput)
-			output.Init(&KeenOutputConfig{})
+			output.Init(&KeenOutputConfig{Collection: "job-finished"})
 			mockClient := MockKeenClient{mock.Mock{}}
 			output.client = &mockClient
 
