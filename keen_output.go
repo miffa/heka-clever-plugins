@@ -6,8 +6,12 @@ import (
 	"github.com/mozilla-services/heka/pipeline"
 )
 
+type KeenClient interface {
+	AddEvent(collection string, event interface{}) error
+}
+
 type KeenOutput struct {
-	client *keen.Client
+	client KeenClient
 }
 
 type KeenOutputConfig struct {
@@ -26,14 +30,12 @@ func (ko *KeenOutput) Init(rawConf interface{}) error {
 }
 
 func (ko *KeenOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) error {
-	var (
-		err  error
-		pack *pipeline.PipelinePack
-	)
+	for pack := range or.InChan() {
+		payload := pack.Message.GetPayload()
+		pack.Recycle()
 
-	for pack = range or.InChan() {
 		event := make(map[string]interface{})
-		err = json.Unmarshal([]byte(pack.Message.GetPayload()), &event)
+		err := json.Unmarshal([]byte(payload), &event)
 		if err != nil {
 			or.LogError(err)
 			continue
@@ -43,7 +45,6 @@ func (ko *KeenOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) err
 			or.LogError(err)
 			continue
 		}
-		pack.Recycle()
 	}
 	return nil
 }
