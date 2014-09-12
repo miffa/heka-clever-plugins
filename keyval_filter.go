@@ -3,6 +3,7 @@ package heka_clever_plugins
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
 	"regexp"
 	"strings"
@@ -11,11 +12,20 @@ import (
 type KeyvalFilter struct {
 }
 
+func (filter *KeyvalFilter) Init(rawConf interface{}) error {
+	return nil
+}
+
 func (filter *KeyvalFilter) Run(r pipeline.FilterRunner, h pipeline.PluginHelper) error {
 	for pack := range r.InChan() {
 		payload := pack.Message.GetPayload()
-		pack.Recycle()
-		fmt.Println(payload)
+		title, jsonString, err := ParseTitleAndKeyvals(payload)
+		if err != nil {
+			r.LogError(err)
+			continue
+		}
+		message.NewStringField(pack.Message, "title", title)
+		message.NewStringField(pack.Message, "jsonString", jsonString)
 	}
 	return nil
 }
