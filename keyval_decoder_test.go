@@ -20,7 +20,6 @@ func KeyvalDecoderSpec(c gs.Context) {
 		conf := decoder.ConfigStruct().(*KeyvalDecoderConfig)
 		supply := make(chan *PipelinePack, 1)
 		pack := NewPipelinePack(supply)
-		// conf.TimestampLayout = "02/Jan/2006:15:04:05 -0700"
 		c.Specify("parses a message and key=val pairs", func() {
 			err := decoder.Init(conf)
 			c.Assume(err, gs.IsNil)

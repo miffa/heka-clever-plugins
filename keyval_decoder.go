@@ -34,10 +34,6 @@ func (kvd *KeyvalDecoder) Decode(pack *pipeline.PipelinePack) (packs []*pipeline
 
 	message.NewStringField(pack.Message, "Title", title)
 	pack.Message.SetPayload(jsonString)
-	// pack.Message.AddField(f)
-	// if err = kvd.messageFields.PopulateMessage(pack.Message, nil); err != nil {
-	// 	return
-	// }
 	return []*pipeline.PipelinePack{pack}, nil
 }
 
