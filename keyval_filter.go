@@ -9,26 +9,46 @@ import (
 	"strings"
 )
 
-type KeyvalFilter struct {
+type KeyvalDecoderConfig struct {
 }
 
-func (filter *KeyvalFilter) Init(rawConf interface{}) error {
-	return nil
+type KeyvalDecoder struct {
+	dRunner       pipeline.DecoderRunner
+	messageFields pipeline.MessageTemplate
 }
 
-func (filter *KeyvalFilter) Run(r pipeline.FilterRunner, h pipeline.PluginHelper) error {
-	for pack := range r.InChan() {
-		payload := pack.Message.GetPayload()
-		title, jsonString, err := ParseTitleAndKeyvals(payload)
-		if err != nil {
-			r.LogError(err)
-			continue
-		}
-		pack.Message.SetPayload(jsonString)
-		message.NewStringField(pack.Message, "title", title)
-		message.NewStringField(pack.Message, "jsonString", jsonString)
+func (kvd *KeyvalDecoder) ConfigStruct() interface{} {
+	return new(KeyvalDecoderConfig)
+}
+
+func (kvd *KeyvalDecoder) Init(config interface{}) (err error) {
+	_ = config.(*KeyvalDecoderConfig)
+	return
+}
+
+func (kvd *KeyvalDecoder) Decode(pack *pipeline.PipelinePack) (packs []*pipeline.PipelinePack, err error) {
+	title, jsonString, err := ParseTitleAndKeyvals(pack.Message.GetPayload())
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	message.NewStringField(pack.Message, "Title", title)
+	pack.Message.SetPayload(jsonString)
+	// pack.Message.AddField(f)
+	// if err = kvd.messageFields.PopulateMessage(pack.Message, nil); err != nil {
+	// 	return
+	// }
+	return []*pipeline.PipelinePack{pack}, nil
+}
+
+func (kvd *KeyvalDecoder) SetDecoderRunner(dr pipeline.DecoderRunner) {
+	kvd.dRunner = dr
+}
+
+func init() {
+	pipeline.RegisterPlugin("KeyvalDecoder", func() interface{} {
+		return new(KeyvalDecoder)
+	})
 }
 
 // ParseTitleAndKeyvals takes a string of form "TITLE a=b c=d ..." and returns its title and a stringified JSON of its key-val pairs
@@ -106,10 +126,4 @@ func findKeyValPair(s string) (key string, val string, rest string, err error) {
 	}
 
 	return key, val, rest, nil
-}
-
-func init() {
-	pipeline.RegisterPlugin("KeyvalFilter", func() interface{} {
-		return new(KeyvalFilter)
-	})
 }

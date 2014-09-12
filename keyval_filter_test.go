@@ -1,9 +1,52 @@
 package heka_clever_plugins
 
 import (
+	"code.google.com/p/gomock/gomock"
+	. "github.com/mozilla-services/heka/pipeline"
+	pipeline_ts "github.com/mozilla-services/heka/pipeline/testsupport"
+	"github.com/mozilla-services/heka/pipelinemock"
+	gs "github.com/rafrombrc/gospec/src/gospec"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
+
+func KeyvalDecoderSpec(c gs.Context) {
+	t := &pipeline_ts.SimpleT{}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	c.Specify("A KeyvalDecoder", func() {
+		decoder := new(KeyvalDecoder)
+
+		conf := decoder.ConfigStruct().(*KeyvalDecoderConfig)
+		supply := make(chan *PipelinePack, 1)
+		pack := NewPipelinePack(supply)
+		// conf.TimestampLayout = "02/Jan/2006:15:04:05 -0700"
+		c.Specify("parses a message and key=val pairs", func() {
+			err := decoder.Init(conf)
+			c.Assume(err, gs.IsNil)
+			dRunner := pipelinemock.NewMockDecoderRunner(ctrl)
+			decoder.SetDecoderRunner(dRunner)
+			pack.Message.SetPayload("MSG x=y")
+			_, err = decoder.Decode(pack)
+
+			title, ok := pack.Message.GetFieldValue("Title")
+			c.Expect(ok, gs.Equals, true)
+			c.Expect(title, gs.Equals, string("MSG"))
+			c.Expect(pack.Message.GetPayload(), gs.Equals, string(`{"x":"y"}`))
+			pack.Zero()
+		})
+	})
+}
+
+func Test_KeyvalSpecs(t *testing.T) {
+	universalT = t
+	r := gs.NewRunner()
+	r.Parallel = false
+
+	r.AddSpec(KeyvalDecoderSpec)
+
+	gs.MainGoTest(r, t)
+}
 
 type TestSpec struct {
 	input    string
