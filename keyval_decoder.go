@@ -10,11 +10,12 @@ import (
 )
 
 type KeyvalDecoderConfig struct {
+	MessageFields pipeline.MessageTemplate `toml:"message_fields"`
 }
 
 type KeyvalDecoder struct {
 	dRunner       pipeline.DecoderRunner
-	messageFields pipeline.MessageTemplate
+	MessageFields pipeline.MessageTemplate
 }
 
 func (kvd *KeyvalDecoder) ConfigStruct() interface{} {
@@ -22,7 +23,13 @@ func (kvd *KeyvalDecoder) ConfigStruct() interface{} {
 }
 
 func (kvd *KeyvalDecoder) Init(config interface{}) (err error) {
-	_ = config.(*KeyvalDecoderConfig)
+	conf := config.(*KeyvalDecoderConfig)
+	kvd.MessageFields = make(pipeline.MessageTemplate)
+	if conf.MessageFields != nil {
+		for field, action := range conf.MessageFields {
+			kvd.MessageFields[field] = action
+		}
+	}
 	return
 }
 
