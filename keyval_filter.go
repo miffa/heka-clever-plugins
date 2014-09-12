@@ -24,6 +24,7 @@ func (filter *KeyvalFilter) Run(r pipeline.FilterRunner, h pipeline.PluginHelper
 			r.LogError(err)
 			continue
 		}
+		pack.Message.SetPayload(jsonString)
 		message.NewStringField(pack.Message, "title", title)
 		message.NewStringField(pack.Message, "jsonString", jsonString)
 	}
