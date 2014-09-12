@@ -34,8 +34,8 @@ func ParseTitleAndKeyvals(s string) (title string, jsonString string, err error)
 	return title, jsonString, nil
 }
 
-// keyvalToJsonString array of strings of form []{"a=b","c=d"} and returns a stringified JSON repesentation `{"a":"b,"c":"d"}`
-// Note: Order of arguments is not preserved in outputted JSON.
+// keyvalToJsonString takes a string of form "a=b c=d" and returns a stringified JSON repesentation `{"a":"b,"c":"d"}`
+// Order of arguments is not preserved in outputted JSON.
 func keyvalToJsonString(s string) (string, error) {
 	items := map[string]string{}
 	for {
