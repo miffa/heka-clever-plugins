@@ -25,7 +25,7 @@ func KeyvalDecoderSpec(c gs.Context) {
 			c.Assume(err, gs.IsNil)
 			dRunner := pipelinemock.NewMockDecoderRunner(ctrl)
 			decoder.SetDecoderRunner(dRunner)
-			pack.Message.SetPayload("MSG x=y")
+			pack.Message.SetPayload("MSG x=y\n")
 			_, err = decoder.Decode(pack)
 
 			title, ok := pack.Message.GetFieldValue("Title")
@@ -56,7 +56,10 @@ type TestSpec struct {
 func Test_ParseTitleAndKeyvals(t *testing.T) {
 	specs := []TestSpec{
 		TestSpec{"MSG", []string{"MSG", `{}`}},
+		TestSpec{"MSG\n", []string{"MSG", `{}`}},
 		TestSpec{"MSG a=b", []string{"MSG", `{"a":"b"}`}},
+		TestSpec{"MSG a=b\n", []string{"MSG", `{"a":"b"}`}},
+		TestSpec{"MSG a=b  \n   \n", []string{"MSG", `{"a":"b"}`}},
 		TestSpec{"MSG a=b  c=d ", []string{"MSG", `{"a":"b","c":"d"}`}},
 	}
 	for _, spec := range specs {
@@ -106,6 +109,7 @@ func Test_keyvalToJsonString_Errors(t *testing.T) {
 		"====",
 		" a ",
 		" a=b c  ",
+		" a=b c \n ",
 	}
 	for _, input := range inputs {
 		actual, err := keyvalToJsonString(input)

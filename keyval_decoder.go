@@ -65,6 +65,10 @@ func init() {
 
 // ParseTitleAndKeyvals takes a string of form "TITLE a=b c=d ..." and returns its title and a stringified JSON of its key-val pairs
 func ParseTitleAndKeyvals(s string) (title string, jsonString string, err error) {
+	// Just parse one line
+	if lineBreakIdx := strings.Index(s, "\n"); lineBreakIdx > 0 {
+		s = s[:lineBreakIdx]
+	}
 	split := strings.SplitN(s, " ", 2)
 	if len(split) == 1 {
 		return s, "{}", nil
