@@ -23,7 +23,6 @@ func (kvd *KeyvalDecoder) ConfigStruct() interface{} {
 }
 
 func (kvd *KeyvalDecoder) Init(config interface{}) (err error) {
-	fmt.Println("KeyvalDecoder: Init")
 	conf := config.(*KeyvalDecoderConfig)
 	kvd.messageFields = make(pipeline.MessageTemplate)
 	if conf.MessageFields != nil {
@@ -31,26 +30,17 @@ func (kvd *KeyvalDecoder) Init(config interface{}) (err error) {
 			kvd.messageFields[field] = action
 		}
 	}
-	fmt.Print("KeyvalDecoder: Init - Message Fields", kvd.messageFields)
-	fmt.Println("KeyvalDecoder: Init - Return")
 	return
 }
 
 func (kvd *KeyvalDecoder) Decode(pack *pipeline.PipelinePack) (packs []*pipeline.PipelinePack, err error) {
-	fmt.Println("KeyvalDecoder: Decode")
-	fmt.Println("KeyvalDecoder: Decode - msg:", pack.Message)
-	fmt.Println("KeyvalDecoder: Decode - msg.payload:", pack.Message.GetPayload())
 	title, jsonString, err := ParseTitleAndKeyvals(pack.Message.GetPayload())
-
 	if err != nil {
-		fmt.Println("KeyvalDecoder: Decode - Err", err)
 		return nil, err
 	}
-
 	message.NewStringField(pack.Message, "Title", title)
 	message.NewStringField(pack.Message, "JsonString", jsonString)
 	pack.Message.SetPayload(jsonString)
-	fmt.Println("KeyvalDecoder: Decode - return", pack.Message)
 	if err = kvd.messageFields.PopulateMessage(pack.Message, nil); err != nil {
 		return
 	}

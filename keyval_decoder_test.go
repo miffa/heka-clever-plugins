@@ -46,10 +46,6 @@ func KeyvalDecoderSpec(c gs.Context) {
 			pack.Message.SetPayload("MSG x=y\n")
 			_, err = decoder.Decode(pack)
 
-			title, ok := pack.Message.GetFieldValue("Title")
-			c.Expect(ok, gs.Equals, true)
-			c.Expect(title, gs.Equals, string("MSG"))
-			c.Expect(pack.Message.GetPayload(), gs.Equals, string(`{"x":"y"}`))
 			c.Expect(pack.Message.GetType(), gs.Equals, myType)
 			pack.Zero()
 		})
