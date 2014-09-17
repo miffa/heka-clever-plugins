@@ -15,7 +15,7 @@ type KeyvalDecoderConfig struct {
 
 type KeyvalDecoder struct {
 	dRunner       pipeline.DecoderRunner
-	MessageFields pipeline.MessageTemplate
+	messageFields pipeline.MessageTemplate
 }
 
 func (kvd *KeyvalDecoder) ConfigStruct() interface{} {
@@ -25,12 +25,13 @@ func (kvd *KeyvalDecoder) ConfigStruct() interface{} {
 func (kvd *KeyvalDecoder) Init(config interface{}) (err error) {
 	fmt.Println("KeyvalDecoder: Init")
 	conf := config.(*KeyvalDecoderConfig)
-	kvd.MessageFields = make(pipeline.MessageTemplate)
+	kvd.messageFields = make(pipeline.MessageTemplate)
 	if conf.MessageFields != nil {
 		for field, action := range conf.MessageFields {
-			kvd.MessageFields[field] = action
+			kvd.messageFields[field] = action
 		}
 	}
+	fmt.Print("KeyvalDecoder: Init - Message Fields", kvd.messageFields)
 	fmt.Println("KeyvalDecoder: Init - Return")
 	return
 }
@@ -50,6 +51,9 @@ func (kvd *KeyvalDecoder) Decode(pack *pipeline.PipelinePack) (packs []*pipeline
 	message.NewStringField(pack.Message, "JsonString", jsonString)
 	pack.Message.SetPayload(jsonString)
 	fmt.Println("KeyvalDecoder: Decode - return", pack.Message)
+	if err = kvd.messageFields.PopulateMessage(pack.Message, nil); err != nil {
+		return
+	}
 	return []*pipeline.PipelinePack{pack}, nil
 }
 

@@ -16,11 +16,29 @@ func KeyvalDecoderSpec(c gs.Context) {
 	defer ctrl.Finish()
 	c.Specify("A KeyvalDecoder", func() {
 		decoder := new(KeyvalDecoder)
-
-		conf := decoder.ConfigStruct().(*KeyvalDecoderConfig)
+		emptyConf := decoder.ConfigStruct().(*KeyvalDecoderConfig)
 		supply := make(chan *PipelinePack, 1)
 		pack := NewPipelinePack(supply)
 		c.Specify("parses a message and key=val pairs", func() {
+			err := decoder.Init(emptyConf)
+			c.Assume(err, gs.IsNil)
+			dRunner := pipelinemock.NewMockDecoderRunner(ctrl)
+			decoder.SetDecoderRunner(dRunner)
+			pack.Message.SetPayload("MSG x=y\n")
+			_, err = decoder.Decode(pack)
+
+			title, ok := pack.Message.GetFieldValue("Title")
+			c.Expect(ok, gs.Equals, true)
+			c.Expect(title, gs.Equals, string("MSG"))
+			c.Expect(pack.Message.GetPayload(), gs.Equals, string(`{"x":"y"}`))
+			c.Expect(pack.Message.GetType(), gs.Equals, "")
+			pack.Zero()
+		})
+
+		conf := decoder.ConfigStruct().(*KeyvalDecoderConfig)
+		myType := "customTypeName"
+		conf.MessageFields = MessageTemplate{"Type": myType}
+		c.Specify("allows setting MessageFields via config", func() {
 			err := decoder.Init(conf)
 			c.Assume(err, gs.IsNil)
 			dRunner := pipelinemock.NewMockDecoderRunner(ctrl)
@@ -32,6 +50,7 @@ func KeyvalDecoderSpec(c gs.Context) {
 			c.Expect(ok, gs.Equals, true)
 			c.Expect(title, gs.Equals, string("MSG"))
 			c.Expect(pack.Message.GetPayload(), gs.Equals, string(`{"x":"y"}`))
+			c.Expect(pack.Message.GetType(), gs.Equals, myType)
 			pack.Zero()
 		})
 	})
