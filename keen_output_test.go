@@ -125,13 +125,3 @@ func KeenOutputSpec(c gs.Context) {
 		}
 	})
 }
-
-func TestAllSpecs(t *testing.T) {
-	universalT = t
-	r := gs.NewRunner()
-	r.Parallel = false
-
-	r.AddSpec(KeenOutputSpec)
-
-	gs.MainGoTest(r, t)
-}
