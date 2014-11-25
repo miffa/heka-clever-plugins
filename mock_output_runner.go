@@ -88,3 +88,11 @@ func (mor *MockOutputRunner) SetLeakCount(count int) {
 func (mor *MockOutputRunner) LeakCount() int {
 	panic("Method not implemented")
 }
+
+func (mor *MockOutputRunner) IsStoppable() bool {
+	panic("Method not implemented")
+}
+
+func (mor *MockOutputRunner) Unregister(pConfig *pipeline.PipelineConfig) error {
+	panic("Method not implemented")
+}
