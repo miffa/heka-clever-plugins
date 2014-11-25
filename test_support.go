@@ -1,8 +1,8 @@
 package heka_clever_plugins
 
 import (
-	"code.google.com/p/gomock/gomock"
 	"github.com/mozilla-services/heka/pipelinemock"
+	"github.com/rafrombrc/gomock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"testing"
