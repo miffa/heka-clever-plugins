@@ -41,10 +41,9 @@ func (kvd *JsonDecoder) Decode(pack *pipeline.PipelinePack) (packs []*pipeline.P
 	*pack.Message.Payload = jsonString
 
 	// For keys that have string values, write to message.Fields
-	for key, val := range jsonMap {
-		stringVal, ok := val.(string)
-		if ok {
-			message.NewStringField(pack.Message, key, stringVal)
+	for name, val := range jsonMap {
+		if f, err := message.NewField(name, val, ""); err == nil {
+			pack.Message.AddField(f)
 		}
 	}
 
