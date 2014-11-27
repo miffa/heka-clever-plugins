@@ -1,7 +1,5 @@
 package heka_clever_plugins
 
-// TODO: move to test package
-
 import (
 	"github.com/mozilla-services/heka/pipeline"
 	"github.com/mozilla-services/heka/pipelinemock"
