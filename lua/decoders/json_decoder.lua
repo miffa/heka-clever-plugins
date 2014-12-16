@@ -38,6 +38,7 @@ function process_message()
     if not ok then
         return -1
     end
+    if type(json) ~= "table" then return -1 end
     
     for k, v in pairs(json) do
         write_message("Fields[" .. k .. "]", v)
