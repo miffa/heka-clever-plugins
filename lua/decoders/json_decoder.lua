@@ -31,7 +31,7 @@ Config:
 
 require "cjson"
 
-local msg_type     = read_config("type") or 'json'
+local msg_type = read_config("type") or 'json'
 
 function process_message()
     local ok, json = pcall(cjson.decode, read_message("Payload"))
@@ -39,7 +39,6 @@ function process_message()
         return -1
     end
     
-
     for k, v in pairs(json) do
         write_message("Fields[" .. k .. "]", v)
     end
