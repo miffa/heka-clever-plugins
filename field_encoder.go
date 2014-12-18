@@ -62,10 +62,7 @@ func getSubsFromMessageFields(pack *pipeline.PipelinePack) (subs map[string]stri
 	for _, field := range pack.Message.Fields {
 		name := field.GetName()
 		copiedField := message.CopyField(field)
-		// if a value cannot be typecast to a string, it will
-		// be replaced with the empty string
-		stringifiedValue, _ := copiedField.GetValue().(string)
-		subs[name] = stringifiedValue
+		subs[name] = fmt.Sprint(copiedField.GetValue())
 	}
 	return subs
 }
