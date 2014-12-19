@@ -93,5 +93,36 @@ func FieldEncoderSpec(c gs.Context) {
 			})
 		}
 
+		test := testSpec{
+			name: "string",
+			messageTemplate: pipeline.MessageTemplate{
+				"Payload":    "%string_field%",
+				"otherfield": "%int_field%",
+			},
+			expectedPayload: "string",
+		}
+
+		// Fields other than Payload
+		c.Specify(fmt.Sprintf("possible to override fields besides Payload with templated values", test.name), func() {
+			conf := encoder.ConfigStruct().(*FieldEncoderConfig)
+			conf.MessageFields = test.messageTemplate
+
+			// Load message config
+			err = encoder.Init(conf)
+			c.Expect(err, gs.IsNil)
+
+			// Encode the pack and verify the payload has been overridden
+			output, err = encoder.Encode(pack)
+			c.Expect(err, gs.IsNil)
+			actual := string(output)
+			expected := fmt.Sprintf(test.expectedPayload)
+			c.Expect(actual, gs.Equals, expected)
+
+			// Verify custom field was written (with templated value)
+			otherField, ok := pack.Message.GetFieldValue("otherfield")
+			c.Expect(ok, gs.Equals, true)
+			c.Expect(otherField, gs.Equals, "1")
+		})
+
 	})
 }
