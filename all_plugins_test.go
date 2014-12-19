@@ -1,8 +1,9 @@
 package heka_clever_plugins
 
 import (
-	gs "github.com/rafrombrc/gospec/src/gospec"
 	"testing"
+
+	gs "github.com/rafrombrc/gospec/src/gospec"
 )
 
 func TestAllSpecs(t *testing.T) {
@@ -12,7 +13,7 @@ func TestAllSpecs(t *testing.T) {
 
 	r.AddSpec(KeenOutputSpec)
 	r.AddSpec(JsonDecoderSpec)
-	r.AddSpec(JsonEncoderSpec)
+	r.AddSpec(FieldEncoderSpec)
 
 	gs.MainGoTest(r, t)
 }
