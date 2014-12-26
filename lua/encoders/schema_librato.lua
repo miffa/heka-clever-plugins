@@ -9,9 +9,14 @@ and generates JSON suitable for use with the Librato
 
 Config:
 
-- ignore_fields (string, optional, defaults to "")
+- ignore_fields (string, optional, defaults to "level")
     A `,` seperated list of Fields that will be omitted when creating the metric name
     eg. "extra,hostname" will ignore fields called `extra` and `hostname` from the metric name
+- start_with (string, optional, defaults to "")
+    A `,` seperated list of Fields whose values will be used at the start of the metric name. 
+    Other fields values will be appended after in alphabetical order.
+    eg. "source,title" will start each metric name with the values %title%.%source%.
+
 
 *Example Heka Configuration*
 
@@ -51,11 +56,18 @@ local stat_types = {
     counters = "counters"
 }
 local ignore_fields_config = read_config("ignore_fields") or 'level'
+local start_with_config = read_config("start_with") or ''
 
 local ignore_fields = { value = true, type = true}
 for f in string.gmatch(ignore_fields_config, '([^,]+)') do
     if f ~= "" and f ~= nil then
         ignore_fields[f] = true
+    end
+end
+local start_with = {}
+for f in string.gmatch(start_with_config, '([^,]+)') do
+    if f ~= "" and f ~= nil then
+        start_with[f] = true
     end
 end
 
@@ -66,13 +78,22 @@ function metric_name()
     while true do
         typ, name, value, representation, count = read_next_field()
         if not typ then break end
-        if ignore_fields[name] == nil then
+        -- skip ignore_fields and start_with fields
+        if ignore_fields[name] == nil and start_with[name] == nil then
             table.insert(field_names, name)
         end
     end
     table.sort(field_names)
 
     local names = {}
+    -- manually insert start_with fields in the start
+    for key, _ in pairs(start_with) do
+        local val = read_message("Fields[".. key .."]")
+        if val then
+            table.insert(names, val)
+        end
+    end
+
     for _, field in pairs(field_names) do
         local val = read_message("Fields[".. field .."]")
         if val then
