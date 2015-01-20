@@ -46,6 +46,8 @@ end
 function process_message()
     local payload = read_message("Payload")
     local ok, json = pcall(cjson.decode, payload)
+    local prefix = ''
+    local postfix = ''
 
     if strict_parsing and not ok then
         return -1 
@@ -57,15 +59,18 @@ function process_message()
             return -1
         end
 
-        write_message("Fields[_prefix]", string.sub(payload, 0, json_start-1))
-        write_message("Fields[_postfix]", string.sub(payload, json_end+1))
+        prefix = string.sub(payload, 0, json_start-1)
+        postfix = string.sub(payload, json_end+1)
         ok, json = pcall(cjson.decode, string.sub(payload, json_start, json_end))
 
     end
 
     if not ok then return -1 end
     if type(json) ~= "table" then return -1 end
-    
+
+    write_message("Fields[_prefix]", prefix)
+    write_message("Fields[_postfix]", postfix)
+
     for k, v in pairs(json) do
         write_message("Fields[" .. k .. "]", v)
     end
