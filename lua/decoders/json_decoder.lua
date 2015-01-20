@@ -72,9 +72,11 @@ function process_message()
     write_message("Fields[_postfix]", postfix)
 
     for k, v in pairs(json) do
-        write_message("Fields[" .. k .. "]", v)
+        if not k == nil and not v == nil then 
+            write_message("Fields[" .. k .. "]", v)
+        end
     end
-    write_message("Type", msg_type)
 
+    write_message("Type", msg_type)
     return 0
 end
