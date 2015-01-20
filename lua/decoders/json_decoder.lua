@@ -72,9 +72,11 @@ function process_message()
     write_message("Fields[_postfix]", postfix)
 
     for k, v in pairs(json) do
-        if not k == nil and not v == nil then 
-            write_message("Fields[" .. k .. "]", v)
+        -- nested json strings are not supported, stringify them
+        if type(v) == "table" then
+            v = json.encode(v)
         end
+        write_message("Fields[" .. k .. "]", v)
     end
 
     write_message("Type", msg_type)
