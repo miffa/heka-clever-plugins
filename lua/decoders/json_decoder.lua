@@ -68,15 +68,17 @@ function process_message()
     if not ok then return -1 end
     if type(json) ~= "table" then return -1 end
 
+    write_message("Payload", cjson.encode(json))
     write_message("Fields[_prefix]", prefix)
     write_message("Fields[_postfix]", postfix)
 
     for k, v in pairs(json) do
         -- nested json strings are not supported, stringify them
         if type(v) == "table" then
-            v = json.encode(v)
+            write_message("Fields[" .. k .. "]", cjson.encode(v))
+        else
+            write_message("Fields[" .. k .. "]", v)
         end
-        write_message("Fields[" .. k .. "]", v)
     end
 
     write_message("Type", msg_type)
