@@ -136,7 +136,8 @@ local function get_array_value(field, field_idx, count)
     return value
 end
 
-local encoded_messages = {}
+encoded_messages = {}
+batch_max_count = read_config("max_count") or 20
 
 function process_message()
     local columns = {}
@@ -190,10 +191,16 @@ function process_message()
        points =  {values}
     }
     table.insert(encoded_messages, output)
+    if #encoded_messages == batch_max_count then
+       inject_payload("json", "influxdbbatch", cjson.encode(encoded_messages))
+       encoded_messages = {}
+    end
     return 0
 end
 
 function timer_event(ns)
+   -- details of the lua sandbox guarantee that this timer
+   -- does not get called in the middle of a process_message call
    if #encoded_messages > 0 then
       inject_payload("json","influxdbbatch",cjson.encode(encoded_messages))
       encoded_messages = {}
