@@ -17,7 +17,24 @@ Testing
 Plugins
 -------
 
-### keen-output.go
+## Decoders
+### Json Decoder
+
+Reads JSON in message payload, and writes its keys and values to the Heka message's fields.
+
+## Encoders
+### Schema Librato Encoder
+### Statmetric Segment Encoder
+
+## Filters
+### InfluxDB Batch Filter
+
+## Outputs
+### Postgres Output
+
+Writes data to a Postgres database.
+
+### Keen Output
+
 Sends event data to Keen.io.
-TODO: Note that we may wish to replace this with the built-in HttpOutput plugin (see https://github.com/mozilla-services/heka/pull/941),
-which unexpectedly made it into Heka's 0.6 release.
+

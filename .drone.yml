@@ -1,0 +1,20 @@
+image: go1.2
+services:
+  - postgres
+notify:
+  email:
+    recipients:
+    - drone@clever.com
+  hipchat:
+    on_failure: true
+    on_started: true
+    on_success: true
+    room: Clever-Dev-CI
+    token: {{hipchatToken}}
+script:
+  - createdb -h localhost -U postgres drone
+  - psql -U postgres -h localhost -c "CREATE TABLE \"mock_table\" (s text, i int)" drone
+  - cd postgres
+  - go get ./...
+  - go get github.com/stretchr/testify/assert
+  - go test
