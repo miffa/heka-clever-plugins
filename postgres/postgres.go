@@ -96,10 +96,12 @@ func (pi *PostgresDB) Insert(table string, columns []string, values [][]interfac
 		return err
 	}
 	flatValues := flatten(values)
-	_, err = pi.DB.Query(q, flatValues...)
+	rows, err := pi.DB.Query(q, flatValues...)
 	if err != nil {
 		return err
 	}
+	// Close the connection, to avoid "pq: sorry, too many clients already" error
+	rows.Close()
 	return nil
 }
 
