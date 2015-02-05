@@ -2,7 +2,7 @@ package heka_clever_plugins
 
 import (
 	"fmt"
-	"github.com/clever/heka-clever-plugins/postgres"
+	"github.com/Clever/heka-clever-plugins/postgres"
 	_ "github.com/lib/pq"
 	"github.com/mozilla-services/heka/message"
 	. "github.com/mozilla-services/heka/pipeline"
