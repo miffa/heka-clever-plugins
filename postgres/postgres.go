@@ -5,6 +5,7 @@ import (
 	"fmt"
 	_ "github.com/lib/pq"
 	"log"
+	"strings"
 )
 
 type PostgresDB struct {
@@ -48,12 +49,7 @@ func buildInsertQuery(table string, columns []string, values [][]interface{}) (s
 	columnCount := len(columns)
 	if columnCount > 0 {
 		q += "("
-		for colIdx, col := range columns {
-			if colIdx > 0 {
-				q += ", "
-			}
-			q += col
-		}
+		q += strings.Join(columns, ", ")
 		q += ") "
 	}
 	q += "VALUES "
@@ -97,11 +93,13 @@ func (pi *PostgresDB) Insert(table string, columns []string, values [][]interfac
 	}
 	flatValues := flatten(values)
 	rows, err := pi.DB.Query(q, flatValues...)
+	if rows != nil {
+		// Close the connection, to avoid "pq: sorry, too many clients already" error
+		defer rows.Close()
+	}
 	if err != nil {
 		return err
 	}
-	// Close the connection, to avoid "pq: sorry, too many clients already" error
-	rows.Close()
 	return nil
 }
 

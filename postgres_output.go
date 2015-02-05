@@ -29,13 +29,14 @@ type PostgresOutputConfig struct {
 	InsertMessageFields string `toml:"insert_message_fields"`
 
 	// Database Connection
-	DBHost              string `toml:"db_host"`
-	DBPort              int    `toml:"db_port"`
-	DBName              string `toml:"db_name"`
-	DBUser              string `toml:"db_user"`
-	DBPassword          string `toml:"db_password"`
-	DBConnectionTimeout int    `toml:"db_connection_timeout"`
-	DBSSLMode           string `toml:"db_ssl_mode"`
+	DBHost               string `toml:"db_host"`
+	DBPort               int    `toml:"db_port"`
+	DBName               string `toml:"db_name"`
+	DBUser               string `toml:"db_user"`
+	DBPassword           string `toml:"db_password"`
+	DBConnectionTimeout  int    `toml:"db_connection_timeout"`
+	DBMaxOpenConnections int    `toml:"db_max_open_connections"`
+	DBSSLMode            string `toml:"db_ssl_mode"`
 
 	// Interval at which accumulated messages should be written to Postgres,
 	// in milliseconds (default 1000, i.e. 1 second)
@@ -46,10 +47,11 @@ type PostgresOutputConfig struct {
 
 func (po *PostgresOutput) ConfigStruct() interface{} {
 	return &PostgresOutputConfig{
-		DBConnectionTimeout: 5,
-		DBSSLMode:           "require",
-		FlushInterval:       uint32(1000),
-		FlushCount:          10000,
+		DBConnectionTimeout:  5,
+		DBMaxOpenConnections: 10,
+		DBSSLMode:            "require",
+		FlushInterval:        uint32(1000),
+		FlushCount:           10000,
 	}
 }
 
@@ -82,6 +84,7 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 	if err != nil {
 		return err
 	}
+	db.SetMaxOpenConns(config.DBMaxOpenConnections)
 	po.db = db
 	return nil
 }
