@@ -33,7 +33,7 @@ func New(p *DBConnectionParams) (*PostgresDB, error) {
 }
 
 // buildInsertQuery returns string of prepared query for inserting one or more values
-func buildInsertQuery(table string, values [][]interface{}) (string, error) {
+func buildInsertQuery(table string, columns []string, values [][]interface{}) (string, error) {
 	// Validate input
 	if table == "" {
 		return "", fmt.Errorf("table name cannot be empty string")
@@ -43,7 +43,20 @@ func buildInsertQuery(table string, values [][]interface{}) (string, error) {
 	}
 
 	// Build query
-	q := fmt.Sprintf("INSERT INTO \"%s\" VALUES ", table)
+	q := fmt.Sprintf("INSERT INTO \"%s\" ", table)
+	// If columns are specified, add them to query
+	columnCount := len(columns)
+	if columnCount > 0 {
+		q += "("
+		for colIdx, col := range columns {
+			if colIdx > 0 {
+				q += ", "
+			}
+			q += col
+		}
+		q += ") "
+	}
+	q += "VALUES "
 	fieldCount := -1
 	for valIdx, val := range values {
 		// Validate this value
@@ -53,6 +66,10 @@ func buildInsertQuery(table string, values [][]interface{}) (string, error) {
 		fieldCount = len(val)
 		if fieldCount <= 0 {
 			return "", fmt.Errorf("value must have at least one field")
+		}
+		if columnCount != 0 && fieldCount != columnCount {
+			// If inserting into specific columns, verify that we have the right number of elements in each value
+			return "", fmt.Errorf("value has %d elements, so cannot insert into %d columns", fieldCount, columnCount)
 		}
 
 		// Add value to the query
@@ -73,8 +90,8 @@ func buildInsertQuery(table string, values [][]interface{}) (string, error) {
 }
 
 // Insert one or more values into DB
-func (pi *PostgresDB) Insert(table string, values [][]interface{}) error {
-	q, err := buildInsertQuery(table, values)
+func (pi *PostgresDB) Insert(table string, columns []string, values [][]interface{}) error {
+	q, err := buildInsertQuery(table, columns, values)
 	if err != nil {
 		return err
 	}
