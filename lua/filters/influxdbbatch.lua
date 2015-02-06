@@ -49,7 +49,7 @@ Config:
         skip_fields = "Pid EnvVersion"
         
     [InfluxOutput]
-    message_matcher = "Fields[payload_name] = 'influxdbbatch'"
+    message_matcher = "Fields[payload_name] == 'influxdbbatch'"
     encoder = "influxdb"
     type = "HttpOutput"
     address = "http://influxdbserver.example.com:8086/db/databasename/series"
