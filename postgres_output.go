@@ -209,7 +209,7 @@ func (po *PostgresOutput) convertMessageToValues(m *message.Message, insertField
 	}
 
 	if len(missingFields) > 0 {
-		return []interface{}{}, fmt.Errorf("message is missing expected fields:", missingFields)
+		return []interface{}{}, fmt.Errorf("message is missing expected fields: %s", strings.Join(missingFields, ", "))
 	}
 
 	return fieldValues, nil
