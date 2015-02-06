@@ -40,32 +40,27 @@ func buildInsertQuery(table string, columns []string, values [][]interface{}) (s
 		return "", fmt.Errorf("table name cannot be empty string")
 	}
 	if len(values) <= 0 {
-		return "", fmt.Errorf("requires at least one value")
+		return "", fmt.Errorf("requires at least 1 value")
 	}
+	if len(columns) <= 0 {
+		return "", fmt.Errorf("requires at least 1 column")
+	}
+
+	columnCount := len(columns)
 
 	// Build query
 	q := fmt.Sprintf("INSERT INTO \"%s\" ", table)
-	// If columns are specified, add them to query
-	columnCount := len(columns)
-	if columnCount > 0 {
-		q += "("
-		q += strings.Join(columns, ", ")
-		q += ") "
-	}
+	// Column names
+	q += "("
+	q += strings.Join(columns, ", ")
+	q += ") "
+	// Values
 	q += "VALUES "
-	fieldCount := -1
 	for valIdx, val := range values {
 		// Validate this value
-		if fieldCount != -1 && len(val) != fieldCount {
-			return "", fmt.Errorf("all values must have the same number of fields. first value had %d fields", fieldCount)
-		}
-		fieldCount = len(val)
-		if fieldCount <= 0 {
-			return "", fmt.Errorf("value must have at least one field")
-		}
-		if columnCount != 0 && fieldCount != columnCount {
+		if len(val) != columnCount {
 			// If inserting into specific columns, verify that we have the right number of elements in each value
-			return "", fmt.Errorf("value has %d elements, so cannot insert into %d columns", fieldCount, columnCount)
+			return "", fmt.Errorf("value has %d elements, so cannot insert into %d columns", len(val), columnCount)
 		}
 
 		// Add value to the query
@@ -78,7 +73,7 @@ func buildInsertQuery(table string, columns []string, values [][]interface{}) (s
 				q += ", "
 			}
 			q += "$"
-			q += fmt.Sprintf("%d", valIdx*fieldCount+fieldIdx+1)
+			q += fmt.Sprintf("%d", valIdx*columnCount+fieldIdx+1)
 		}
 		q += ")"
 	}
@@ -93,13 +88,11 @@ func (pi *PostgresDB) Insert(table string, columns []string, values [][]interfac
 	}
 	flatValues := flatten(values)
 	rows, err := pi.DB.Query(q, flatValues...)
-	if rows != nil {
-		// Close the connection, to avoid "pq: sorry, too many clients already" error
-		defer rows.Close()
-	}
 	if err != nil {
 		return err
 	}
+	// Close the connection, to avoid "pq: sorry, too many clients already" error
+	defer rows.Close()
 	return nil
 }
 
