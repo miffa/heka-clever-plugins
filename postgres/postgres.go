@@ -5,6 +5,7 @@ import (
 	"fmt"
 	_ "github.com/lib/pq"
 	"log"
+	"strings"
 )
 
 type PostgresDB struct {
@@ -33,26 +34,33 @@ func New(p *DBConnectionParams) (*PostgresDB, error) {
 }
 
 // buildInsertQuery returns string of prepared query for inserting one or more values
-func buildInsertQuery(table string, values [][]interface{}) (string, error) {
+func buildInsertQuery(table string, columns []string, values [][]interface{}) (string, error) {
 	// Validate input
 	if table == "" {
 		return "", fmt.Errorf("table name cannot be empty string")
 	}
 	if len(values) <= 0 {
-		return "", fmt.Errorf("requires at least one value")
+		return "", fmt.Errorf("requires at least 1 value")
+	}
+	if len(columns) <= 0 {
+		return "", fmt.Errorf("requires at least 1 column")
 	}
 
+	columnCount := len(columns)
+
 	// Build query
-	q := fmt.Sprintf("INSERT INTO \"%s\" VALUES ", table)
-	fieldCount := -1
+	q := fmt.Sprintf("INSERT INTO \"%s\" ", table)
+	// Column names
+	q += "("
+	q += strings.Join(columns, ", ")
+	q += ") "
+	// Values
+	q += "VALUES "
 	for valIdx, val := range values {
 		// Validate this value
-		if fieldCount != -1 && len(val) != fieldCount {
-			return "", fmt.Errorf("all values must have the same number of fields. first value had %d fields", fieldCount)
-		}
-		fieldCount = len(val)
-		if fieldCount <= 0 {
-			return "", fmt.Errorf("value must have at least one field")
+		if len(val) != columnCount {
+			// If inserting into specific columns, verify that we have the right number of elements in each value
+			return "", fmt.Errorf("value has %d elements, so cannot insert into %d columns", len(val), columnCount)
 		}
 
 		// Add value to the query
@@ -65,7 +73,7 @@ func buildInsertQuery(table string, values [][]interface{}) (string, error) {
 				q += ", "
 			}
 			q += "$"
-			q += fmt.Sprintf("%d", valIdx*fieldCount+fieldIdx+1)
+			q += fmt.Sprintf("%d", valIdx*columnCount+fieldIdx+1)
 		}
 		q += ")"
 	}
@@ -73,16 +81,18 @@ func buildInsertQuery(table string, values [][]interface{}) (string, error) {
 }
 
 // Insert one or more values into DB
-func (pi *PostgresDB) Insert(table string, values [][]interface{}) error {
-	q, err := buildInsertQuery(table, values)
+func (pi *PostgresDB) Insert(table string, columns []string, values [][]interface{}) error {
+	q, err := buildInsertQuery(table, columns, values)
 	if err != nil {
 		return err
 	}
 	flatValues := flatten(values)
-	_, err = pi.DB.Query(q, flatValues...)
+	rows, err := pi.DB.Query(q, flatValues...)
 	if err != nil {
 		return err
 	}
+	// Close the connection, to avoid "pq: sorry, too many clients already" error
+	defer rows.Close()
 	return nil
 }
 

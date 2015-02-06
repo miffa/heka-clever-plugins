@@ -12,28 +12,31 @@ import (
 )
 
 type PostgresOutput struct {
-	db            *postgres.PostgresDB
-	insertTable   string
-	insertFields  []string
-	batchChan     chan [][]interface{}
-	backChan      chan [][]interface{}
-	flushInterval uint32
-	flushCount    int // Max messages before flush
+	db                  *postgres.PostgresDB
+	insertTable         string
+	insertMessageFields []string
+	insertTableColumns  []string
+	batchChan           chan [][]interface{}
+	backChan            chan [][]interface{}
+	flushInterval       uint32
+	flushCount          int // Max messages before flush
 }
 
 type PostgresOutputConfig struct {
 	// Table name and fields to write
-	InsertTable  string `toml:"insert_table"`
-	InsertFields string `toml:"insert_fields"`
+	InsertTable         string `toml:"insert_table"`
+	InsertTableColumns  string `toml:"insert_table_columns"`
+	InsertMessageFields string `toml:"insert_message_fields"`
 
 	// Database Connection
-	DBHost              string `toml:"db_host"`
-	DBPort              int    `toml:"db_port"`
-	DBName              string `toml:"db_name"`
-	DBUser              string `toml:"db_user"`
-	DBPassword          string `toml:"db_password"`
-	DBConnectionTimeout int    `toml:"db_connection_timeout"`
-	DBSSLMode           string `toml:"db_ssl_mode"`
+	DBHost               string `toml:"db_host"`
+	DBPort               int    `toml:"db_port"`
+	DBName               string `toml:"db_name"`
+	DBUser               string `toml:"db_user"`
+	DBPassword           string `toml:"db_password"`
+	DBConnectionTimeout  int    `toml:"db_connection_timeout"`
+	DBMaxOpenConnections int    `toml:"db_max_open_connections"`
+	DBSSLMode            string `toml:"db_ssl_mode"`
 
 	// Interval at which accumulated messages should be written to Postgres,
 	// in milliseconds (default 1000, i.e. 1 second)
@@ -44,8 +47,11 @@ type PostgresOutputConfig struct {
 
 func (po *PostgresOutput) ConfigStruct() interface{} {
 	return &PostgresOutputConfig{
-		FlushInterval: uint32(1000),
-		FlushCount:    10000,
+		DBConnectionTimeout:  5,
+		DBMaxOpenConnections: 10,
+		DBSSLMode:            "require",
+		FlushInterval:        uint32(1000),
+		FlushCount:           10000,
 	}
 }
 
@@ -56,7 +62,15 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 	po.batchChan = make(chan [][]interface{})
 	po.backChan = make(chan [][]interface{}, 2)
 	po.insertTable = config.InsertTable
-	po.insertFields = strings.Split(config.InsertFields, " ")
+	if config.InsertMessageFields == "" {
+		return fmt.Errorf("config item 'insert_message_fields' cannot be empty string")
+	}
+	po.insertMessageFields = strings.Split(config.InsertMessageFields, " ")
+	if config.InsertTableColumns == "" {
+		return fmt.Errorf("config item 'insert_table_columns' cannot be empty string")
+	}
+	po.insertTableColumns = strings.Split(config.InsertTableColumns, " ")
+
 	p := postgres.DBConnectionParams{
 		Host:           config.DBHost,
 		Port:           config.DBPort,
@@ -66,11 +80,12 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 		ConnectTimeout: config.DBConnectionTimeout,
 		SSLMode:        config.DBSSLMode,
 	}
-	pi, err := postgres.New(&p)
+	db, err := postgres.New(&p)
 	if err != nil {
 		return err
 	}
-	po.db = pi
+	db.SetMaxOpenConns(config.DBMaxOpenConnections)
+	po.db = db
 	return nil
 }
 
@@ -109,7 +124,7 @@ func (o *PostgresOutput) receiver(or OutputRunner, wg *sync.WaitGroup) {
 				break
 			}
 			// Read values from message fields
-			val, e := o.convertMessageToValues(pack.Message, o.insertFields)
+			val, e := o.convertMessageToValues(pack.Message, o.insertMessageFields)
 			pack.Recycle()
 			if e != nil {
 				or.LogError(e)
@@ -147,7 +162,7 @@ func (o *PostgresOutput) committer(or OutputRunner, wg *sync.WaitGroup) {
 	var outBatch [][]interface{}
 
 	for outBatch = range o.batchChan {
-		if err := o.db.Insert(o.insertTable, outBatch); err != nil {
+		if err := o.db.Insert(o.insertTable, o.insertTableColumns, outBatch); err != nil {
 			or.LogError(err)
 		}
 		outBatch = outBatch[:0]
