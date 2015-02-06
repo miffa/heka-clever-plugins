@@ -41,14 +41,16 @@ type = "PostgresOutput"
 # Insert into this table in Postgres DB
 insert_table = "test_table"
 
-# Insert fields is a space delimited list of Heka Message Fields names.
+# insert_message_fields is a space delimited list of Heka Message Fields names.
+# insert_table_columns is a space delimited list of Postgres table columns.
 # It write those fields values in order into a INSERT INTO statement, i.e.
 #   INSERT INTO "test_table" VALUES ($1 $2 $3)
 # where $1 $2 $3 are values read from insert_fields
 #
-# `Timestamp` is a special case that reads timestamp on Heka message.
-# Otherwise, fields names corresponding to Heka Message Fields.
-insert_fields = "Timestamp field_a field_b"
+# `Timestamp` is a special case that reads the Heka message's timestamp.
+# Otherwise, fields names correspond to Heka Message Fields.
+insert_message_fields = "Timestamp field_a field_b"
+insert_table_columns = "col_time col_a col_b"
 
 # Database connection parameters
 db_host = "localhost"
@@ -57,7 +59,12 @@ db_name = "name"
 db_user = "user"
 db_password = "password"
 db_connection_timeout = 5
-db_ssl_mode = "disable"
+
+### Optional ###
+# Database connection parameters
+db_ssl_mode = "disable" ("require" is default)
+db_connection_timeout = 5
+db_max_open_connections = 1000
 
 # Batching configuration
 flush_interval = 1000 # max time before doing an insert (in milliseconds)
