@@ -12,21 +12,24 @@ import (
 )
 
 type PostgresOutput struct {
-	db                  *postgres.PostgresDB
-	insertTable         string
-	insertMessageFields []string
-	insertTableColumns  []string
-	batchChan           chan [][]interface{}
-	backChan            chan [][]interface{}
-	flushInterval       uint32
-	flushCount          int // Max messages before flush
+	db                        *postgres.PostgresDB
+	insertTable               string
+	insertMessageFields       []string
+	insertTableColumns        []string
+	batchChan                 chan [][]interface{}
+	backChan                  chan [][]interface{}
+	flushInterval             uint32
+	flushCount                int // Max messages before flush
+	allowMissingMessageFields bool
 }
 
 type PostgresOutputConfig struct {
-	// Table name and fields to write
+	// Table name and colums. Message fields to write.
 	InsertTable         string `toml:"insert_table"`
 	InsertTableColumns  string `toml:"insert_table_columns"`
 	InsertMessageFields string `toml:"insert_message_fields"`
+	// If a field is missing in the Heka message, allow writing NULL
+	AllowMissingMessageFields bool `toml:"allow_missing_message_fields"`
 
 	// Database Connection
 	DBHost               string `toml:"db_host"`
@@ -47,11 +50,12 @@ type PostgresOutputConfig struct {
 
 func (po *PostgresOutput) ConfigStruct() interface{} {
 	return &PostgresOutputConfig{
-		DBConnectionTimeout:  5,
-		DBMaxOpenConnections: 10,
-		DBSSLMode:            "require",
-		FlushInterval:        uint32(1000),
-		FlushCount:           10000,
+		AllowMissingMessageFields: true,
+		DBConnectionTimeout:       5,
+		DBMaxOpenConnections:      10,
+		DBSSLMode:                 "require",
+		FlushInterval:             uint32(1000),
+		FlushCount:                10000,
 	}
 }
 
@@ -70,6 +74,7 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 		return fmt.Errorf("config item 'insert_table_columns' cannot be empty string")
 	}
 	po.insertTableColumns = strings.Split(config.InsertTableColumns, " ")
+	po.allowMissingMessageFields = config.AllowMissingMessageFields
 
 	p := postgres.DBConnectionParams{
 		Host:           config.DBHost,
@@ -191,15 +196,20 @@ func (po *PostgresOutput) convertMessageToValues(m *message.Message, insertField
 		} else {
 			v, ok := m.GetFieldValue(field)
 			if !ok {
-				missingFields = append(missingFields, field)
-				continue
+				// If configured to do so, write NULL when a FieldValue isn't found in the Heka message
+				if po.allowMissingMessageFields {
+					v = nil
+				} else {
+					missingFields = append(missingFields, field)
+					continue
+				}
 			}
 			fieldValues = append(fieldValues, v)
 		}
 	}
 
 	if len(missingFields) > 0 {
-		return []interface{}{}, fmt.Errorf("message is missing expected fields:", missingFields)
+		return []interface{}{}, fmt.Errorf("message is missing expected fields: %s", strings.Join(missingFields, ", "))
 	}
 
 	return fieldValues, nil

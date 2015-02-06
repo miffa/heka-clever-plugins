@@ -52,6 +52,10 @@ insert_table = "test_table"
 insert_message_fields = "Timestamp field_a field_b"
 insert_table_columns = "col_time col_a col_b"
 
+# If true, will write NULL as a value for any missing field.
+# If false, will error if any of insert_message_fields isn't present on the Heka message.
+allow_missing_message_fields = false # default: true
+
 # Database connection parameters
 db_host = "localhost"
 db_port = 5432
@@ -62,7 +66,7 @@ db_connection_timeout = 5
 
 ### Optional ###
 # Database connection parameters
-db_ssl_mode = "disable" ("require" is default)
+db_ssl_mode = "disable" # default: "require"
 db_connection_timeout = 5
 db_max_open_connections = 1000
 
