@@ -45,6 +45,12 @@ end
 
 function process_message()
     local payload = read_message("Payload")
+
+    -- check length (cjson.encode will crash if payload is > 11500 characters)
+    if #payload > 11500 then
+       return -1
+    end
+
     local ok, json = pcall(cjson.decode, payload)
     local prefix = ''
     local postfix = ''
