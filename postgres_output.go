@@ -2,17 +2,19 @@ package heka_clever_plugins
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/Clever/heka-clever-plugins/postgres"
 	_ "github.com/lib/pq"
 	"github.com/mozilla-services/heka/message"
 	. "github.com/mozilla-services/heka/pipeline"
-	"strings"
-	"sync"
-	"time"
 )
 
 type PostgresOutput struct {
 	db                        *postgres.PostgresDB
+	insertSchema              string
 	insertTable               string
 	insertMessageFields       []string
 	insertTableColumns        []string
@@ -25,6 +27,7 @@ type PostgresOutput struct {
 
 type PostgresOutputConfig struct {
 	// Table name and colums. Message fields to write.
+	InsertSchema        string `toml:"insert_schema"`
 	InsertTable         string `toml:"insert_table"`
 	InsertTableColumns  string `toml:"insert_table_columns"`
 	InsertMessageFields string `toml:"insert_message_fields"`
@@ -56,6 +59,7 @@ func (po *PostgresOutput) ConfigStruct() interface{} {
 		DBSSLMode:                 "require",
 		FlushInterval:             uint32(1000),
 		FlushCount:                10000,
+		InsertSchema:              "public",
 	}
 }
 
@@ -65,6 +69,7 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 	po.flushCount = config.FlushCount
 	po.batchChan = make(chan [][]interface{})
 	po.backChan = make(chan [][]interface{}, 2)
+	po.insertSchema = config.InsertSchema
 	po.insertTable = config.InsertTable
 	if config.InsertMessageFields == "" {
 		return fmt.Errorf("config item 'insert_message_fields' cannot be empty string")
@@ -167,7 +172,7 @@ func (o *PostgresOutput) committer(or OutputRunner, wg *sync.WaitGroup) {
 	var outBatch [][]interface{}
 
 	for outBatch = range o.batchChan {
-		if err := o.db.Insert(o.insertTable, o.insertTableColumns, outBatch); err != nil {
+		if err := o.db.Insert(o.insertSchema, o.insertTable, o.insertTableColumns, outBatch); err != nil {
 			or.LogError(err)
 		}
 		outBatch = outBatch[:0]
