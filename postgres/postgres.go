@@ -3,9 +3,10 @@ package postgres
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/lib/pq"
 	"log"
 	"strings"
+
+	_ "github.com/lib/pq"
 )
 
 type PostgresDB struct {
@@ -34,8 +35,11 @@ func New(p *DBConnectionParams) (*PostgresDB, error) {
 }
 
 // buildInsertQuery returns string of prepared query for inserting one or more values
-func buildInsertQuery(table string, columns []string, values [][]interface{}) (string, error) {
+func buildInsertQuery(schema, table string, columns []string, values [][]interface{}) (string, error) {
 	// Validate input
+	if schema == "" {
+		schema = "public"
+	}
 	if table == "" {
 		return "", fmt.Errorf("table name cannot be empty string")
 	}
@@ -49,7 +53,7 @@ func buildInsertQuery(table string, columns []string, values [][]interface{}) (s
 	columnCount := len(columns)
 
 	// Build query
-	q := fmt.Sprintf("INSERT INTO \"%s\" ", table)
+	q := fmt.Sprintf("INSERT INTO \"%s\".\"%s\" ", schema, table)
 	// Column names
 	q += "("
 	q += strings.Join(columns, ", ")
@@ -81,8 +85,8 @@ func buildInsertQuery(table string, columns []string, values [][]interface{}) (s
 }
 
 // Insert one or more values into DB
-func (pi *PostgresDB) Insert(table string, columns []string, values [][]interface{}) error {
-	q, err := buildInsertQuery(table, columns, values)
+func (pi *PostgresDB) Insert(schema, table string, columns []string, values [][]interface{}) error {
+	q, err := buildInsertQuery(schema, table, columns, values)
 	if err != nil {
 		return err
 	}

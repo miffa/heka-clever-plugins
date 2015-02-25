@@ -65,6 +65,8 @@ db_password = "password"
 db_connection_timeout = 5
 
 ### Optional ###
+# Inert into this schema in Postgres DB
+insert_schema = "testschema"  # default: "public"
 # Database connection parameters
 db_ssl_mode = "disable" # default: "require"
 db_connection_timeout = 5
