@@ -81,10 +81,6 @@ func (mfr *MockFilterRunner) LogMessage(msg string) {
 	panic("Method not implemented")
 }
 
-func (mfr *MockFilterRunner) PluginGlobals() *pipeline.PluginGlobals {
-	panic("Method not implemented")
-}
-
 func (mfr *MockFilterRunner) SetLeakCount(count int) {
 	panic("Method not implemented")
 }
