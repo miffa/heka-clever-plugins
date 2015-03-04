@@ -77,10 +77,6 @@ func (mor *MockOutputRunner) LogMessage(msg string) {
 	panic("Method not implemented")
 }
 
-func (mor *MockOutputRunner) PluginGlobals() *pipeline.PluginGlobals {
-	panic("Method not implemented")
-}
-
 func (mor *MockOutputRunner) SetLeakCount(count int) {
 	panic("Method not implemented")
 }
