@@ -25,6 +25,10 @@ Reads JSON in message payload, and writes its keys and values to the Heka messag
 ## Encoders
 ### Schema Librato Encoder
 ### Statmetric Segment Encoder
+### Slack Encoder
+
+Takes a Heka message and converts it to a form that can be sent to Slack, using `HttpOutput`.
+Sends chat message to a Slack channel.
 
 ## Filters
 ### InfluxDB Batch Filter
