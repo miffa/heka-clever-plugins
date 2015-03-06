@@ -28,7 +28,7 @@ function process_message()
     local slack_alert = {}
 
     -- Read config values from heka .toml
-    config_fields = {"icon_emoji", "username", "channel"}
+    local config_fields = {"icon_emoji", "username", "channel"}
     for _, field in ipairs(config_fields) do
         val = read_config(field)
         if val then
@@ -36,8 +36,15 @@ function process_message()
         end
     end
 
-    -- Read Slack message text from message Fields "msg"
-    text = read_message("Fields[msg]")
+    -- Read Slack message text from message Payload
+    -- or from a Field set via config item `text_field`
+    local text = nil
+    local text_field = read_config("text_field")
+    if text_field then
+        text = read_message("Fields[" .. text_field .. "]")
+    else
+        text = read_message("Payload")
+    end
     if text == nil then
         return -1
     end
