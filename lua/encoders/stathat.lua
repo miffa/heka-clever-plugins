@@ -85,7 +85,7 @@ function process_message()
         stat_type = "count"
         if not value then value = 1 end
     else
-        stat_type = "gauge"
+        stat_type = "value" -- aka "gauge"
         if not value then return -1 end
     end
 
