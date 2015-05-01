@@ -21,8 +21,9 @@ Config:
 
     [StatsdFilter]
     type = "SandboxFilter"
-    filename = "filters/statsdfilter.lua"
+    filename = "lua/filters/statsd_normalizer.lua"
     message_matcher = "Type == 'heka.statmetric'"
+    payload_keep = false
 
         [StatsdFilter.config]
         msg_type="StatsdFiltered"
@@ -60,11 +61,6 @@ function process_message ()
         end
     end
 
-    -- TODO: Inject a message for each stat
-    -- TODO: Only inject if size(Fields) > 0
     inject_message(message)
     return 0
-end
-
-function timer_event(ns)
 end
