@@ -22,7 +22,10 @@ Config:
     [StatsdFilter]
     type = "SandboxFilter"
     filename = "filters/statsdfilter.lua"
+    message_matcher = "Type == 'heka.statmetric'"
 
+        [StatsdFilter.config]
+        msg_type="StatsdFiltered"
 --]]
 
 require "string"
