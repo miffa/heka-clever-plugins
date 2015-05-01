@@ -43,7 +43,7 @@ Config:
 
     [FieldFixFilter]
     type = "SandboxFilter"
-    filename = "lua_filters/fieldfix.lua"
+    filename = "lua/filters/fieldfix.lua"
     preserve_data = false
 
     [FieldFixFilter.config]
