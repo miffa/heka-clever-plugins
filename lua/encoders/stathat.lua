@@ -9,15 +9,24 @@ API <https://www.stathat.com/manual/send>`_.
 
 Config:
 
-- fields (string, required, defaults to "")
-    A ` ` seperated list of Fields whose values will be used at the start of the metric name. 
-    Other fields values will be appended after in alphabetical order.
-    eg. "source title" will use the metric name of %title% %source%.
+- metric_name (string, required)
+    String to use as the `stat` name in StatHat. Supports
+    interpolation of field values from the processed message, using
+    `%{fieldname}`. Any `fieldname` values of "Type", "Payload", "Hostname",
+    "Pid", "Logger", "Severity", or "EnvVersion" will be extracted from the
+    the base message schema, any other values will be assumed to refer to a
+    dynamic message field. Only the first value of the first instance of a
+    dynamic message field can be used for series name interpolation. If the
+    dynamic field doesn't exist, the uninterpolated value will be left in the
+    series name. Note that it is not possible to interpolate either the
+    "Timestamp" or the "Uuid" message fields into the series name, those
+    values will be interpreted as referring to dynamic message fields.
+    eg. "my-app %{source} %{title}" will use the metric name of %title% %source%.
 - ezkey (string, required, defaults to "")
-- field_seperator (string, optional, defaults to " ")
-    Character used to join the fields used in the metric name.
-    eg. fields as "source title" with field_seperator = "." will use the metric name of %title%.%source%.
-
+- value_field (string, optional, defaults to "value")
+    The `fieldname` to use as the value for the metric in stathat. If the `value` 
+    field is not present this encoder will set one as the value for counters: `1`.
+    A value of `0` will be used for `gauges`.
 
 *Example Heka Configuration*
 
@@ -27,9 +36,9 @@ Config:
     type = "SandboxEncoder"
     filename = "lua_encoders/stathat.lua"
        [stathat-encoder.config]
-       fields = "title source"
+       metric_name = "test-metric.%{title}.%{Hostname}"
        ezkey = "stathat-ez-api-key"
-       field_seperator = "."
+       value_field = "metric_value"
 
     [stathat]
     type = "HttpOutput"
@@ -46,31 +55,38 @@ Config:
 --]=]
 
 require "cjson"
-require "table"
 require "string"
+require "table"
 
 
-local fields_config = read_config("fields")
+local metric_name = read_config("metric_name")
 local ezkey = read_config("ezkey")
-local field_seperator= read_config("field_seperator") or " "
 
-local fields = {}
-for f in string.gmatch(fields_config, '([^ ]+)') do
-    if f ~= "" and f ~= nil then
-        fields[f] = true
-    end
+local use_subs
+if string.find(metric_name, "%%{[%w%p]-}") then
+    use_subs = true
 end
 
-function metric_name()
-    local names = {}
-    for key, _ in pairs(fields) do
-        local val = read_message("Fields[".. key .."]")
-        if val then
-            table.insert(names, val)
-        end
-    end
+local base_fields_map = {
+    Type = true,
+    Payload = true,
+    Hostname = true,
+    Pid = true,
+    Logger = true,
+    Severity = true,
+    EnvVersion = true
+}
 
-    return table.concat(names, field_seperator)
+-- Used for interpolating message fields into series name.
+local function sub_func(key)
+    if base_fields_map[key] then
+        return read_message(key)
+    else
+        local val = read_message("Fields["..key.."]")
+        if val then
+            return val end
+        return "%{"..key.."}"
+    end
 end
 
 function process_message()
@@ -79,7 +95,7 @@ function process_message()
     local value = read_message("Fields[value]")
 
     local stat_type = read_message("Fields[type]")
-    -- assume type is gauge unless counter is specified
+    -- assume type is a counter unless gauge is specified
     -- if stat_type is null then just count the event
     if not stat_type or stat_type == "counter" then
         stat_type = "count"
@@ -90,7 +106,12 @@ function process_message()
     end
 
     -- only process name if everything looks good
-    local name = metric_name()
+    local name = ""
+    if use_subs then
+        name = string.gsub(metric_name, "%%{([%w%p]-)}", sub_func)
+    else
+        name = metric_name
+    end
     if not name or name == "" then return -1 end
 
     local output = {
