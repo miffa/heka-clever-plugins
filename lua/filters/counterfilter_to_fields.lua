@@ -5,6 +5,13 @@ Counterfilter to Fields
 This field extracts values from CounterFilter's output and write's them as Fields on the Heka message.
 This allows for easier matching and routing.
 
+Note that CounterFilter emits two different kinds of messages:
+
+1. every interval, says # of total messages and # of messages/sec
+2. every (larger) interval, rolls up this data into aggregate stats
+
+This plugin extracts fields from type (1).
+
 Config:
 
 - msg_type (string, optional, default "counterfilter-to-fields")
@@ -51,7 +58,4 @@ function process_message ()
 
     inject_message(message)
     return 0
-end
-
-function timer_event(ns)
 end
