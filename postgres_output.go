@@ -1,7 +1,6 @@
 package heka_clever_plugins
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -25,6 +24,7 @@ type PostgresOutput struct {
 	flushInterval             uint32
 	flushCount                int // Max messages before flush
 	allowMissingMessageFields bool
+	queryTimeout              uint32
 }
 
 type PostgresOutputConfig struct {
@@ -51,6 +51,9 @@ type PostgresOutputConfig struct {
 	FlushInterval uint32 `toml:"flush_interval"`
 	// Number of messages that triggers a write to Postgres (default 10000)
 	FlushCount int `toml:"flush_count"`
+	// The time in milliseconds that the plugin will wait before giving up
+	// on a Postgres query (defaults to 60000, i.e. 1 minute)
+	QueryTimeout uint32 `toml:"query_timeout"`
 }
 
 func (po *PostgresOutput) ConfigStruct() interface{} {
@@ -62,6 +65,7 @@ func (po *PostgresOutput) ConfigStruct() interface{} {
 		FlushInterval:             uint32(1000),
 		FlushCount:                10000,
 		InsertSchema:              "public",
+		QueryTimeout:              uint32(60000),
 	}
 }
 
@@ -69,6 +73,7 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 	config := rawConf.(*PostgresOutputConfig)
 	po.flushInterval = config.FlushInterval
 	po.flushCount = config.FlushCount
+	po.queryTimeout = config.QueryTimeout
 	po.insertSchema = config.InsertSchema
 	po.insertTable = config.InsertTable
 	if config.InsertMessageFields == "" {
@@ -171,13 +176,13 @@ func (o *PostgresOutput) makeCommitters(count int, wg *sync.WaitGroup) chan<- []
 				}
 
 				done := o.commit(batch)
-				timeout := time.NewTimer(time.Minute)
+				timeout := time.NewTimer(time.Duration(o.queryTimeout) * time.Millisecond)
 
 				select {
 				case <-done:
 					timeout.Stop()
 				case <-timeout.C:
-					o.logError(errors.New("Postgres insert took more than 60s."))
+					o.logError(fmt.Errorf("Postgres insert took more than %dms.", o.queryTimeout))
 				}
 			}
 			wg.Done()
