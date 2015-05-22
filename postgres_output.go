@@ -18,6 +18,7 @@ type PostgresOutput struct {
 
 	helper           PluginHelper
 	runner           OutputRunner
+	lastMsgLoopCount uint
 
 	insertSchema              string
 	insertTable               string
@@ -136,10 +137,12 @@ func (o *PostgresOutput) receiver(committers chan<- [][]interface{}, wg *sync.Wa
 
 			// Read values from message fields
 			vals, err := o.convertMessageToValues(pack.Message, o.insertMessageFields)
+
+			o.lastMsgLoopCount = pack.MsgLoopCount // here to help prevent infinite error loops
 			pack.Recycle()
 
 			if err != nil {
-				o.runner.LogError(err)
+				o.logError(err)
 			} else {
 				batch = append(batch, vals)
 				if len(batch) >= o.flushCount {
@@ -176,7 +179,7 @@ func (o *PostgresOutput) makeCommitters(count int, wg *sync.WaitGroup) chan<- []
 				case <-done:
 					timeout.Stop()
 				case <-timeout.C:
-					o.runner.LogError(errors.New("Postgres insert took more than 60s."))
+					o.logError(errors.New("Postgres insert took more than 60s."))
 				}
 			}
 			wg.Done()
@@ -192,7 +195,7 @@ func (o *PostgresOutput) commit(batch [][]interface{}) <-chan struct{} {
 	go func() {
 		err := o.db.Insert(o.insertSchema, o.insertTable, o.insertTableColumns, batch)
 		if err != nil {
-			o.runner.LogError(err)
+			o.logError(err)
 		}
 		done <- struct{}{}
 	}()
@@ -230,6 +233,23 @@ func (po *PostgresOutput) convertMessageToValues(m *message.Message, insertField
 	}
 
 	return fieldValues, nil
+}
+
+// Injects a pack with an error message back into the heka pipeline so it can be alerted on
+func (po *PostgresOutput) logError(err error) {
+	pack := po.helper.PipelinePack(po.lastMsgLoopCount)
+	if pack == nil {
+		err = fmt.Errorf(
+			"system.postgres-output exceeded MaxMsgLoops = %d, err: %s",
+			po.lastMsgLoopCount, err.Error(),
+		)
+		po.runner.LogError(err)
+		return
+	}
+	pack.Message.SetLogger(po.runner.Name())
+	pack.Message.SetType("system.postgres-output")
+	pack.Message.SetPayload(err.Error())
+	go func() { po.helper.PipelineConfig().Router().InChan() <- pack }() // Don't block sending
 }
 
 func init() {
