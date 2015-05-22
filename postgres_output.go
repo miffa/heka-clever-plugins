@@ -14,12 +14,10 @@ import (
 )
 
 type PostgresOutput struct {
-	db *postgres.PostgresDB
-
-	helper           PluginHelper
-	runner           OutputRunner
-	lastMsgLoopCount uint
-
+	db                        *postgres.PostgresDB
+	helper                    PluginHelper
+	runner                    OutputRunner
+	lastMsgLoopCount          uint
 	insertSchema              string
 	insertTable               string
 	insertMessageFields       []string
