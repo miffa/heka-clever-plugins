@@ -14,7 +14,11 @@ import (
 )
 
 type PostgresOutput struct {
-	db                        *postgres.PostgresDB
+	db *postgres.PostgresDB
+
+	helper           PluginHelper
+	runner           OutputRunner
+
 	insertSchema              string
 	insertTable               string
 	insertMessageFields       []string
@@ -97,11 +101,15 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 
 func (o *PostgresOutput) Run(or OutputRunner, h PluginHelper) (err error) {
 	defer o.db.Close()
+
+	o.runner = or
+	o.helper = h
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	committers := o.makeCommitters(or, 5, &wg)
-	go o.receiver(or, committers, &wg)
+	committers := o.makeCommitters(5, &wg)
+	go o.receiver(committers, &wg)
 
 	wg.Wait()
 	return
@@ -110,9 +118,7 @@ func (o *PostgresOutput) Run(or OutputRunner, h PluginHelper) (err error) {
 // Runs in a separate goroutine, accepting incoming messages, buffering output
 // data until the ticker triggers the buffered data should be put onto the
 // committer channel.
-func (o *PostgresOutput) receiver(
-	or OutputRunner, committers chan<- [][]interface{}, wg *sync.WaitGroup,
-) {
+func (o *PostgresOutput) receiver(committers chan<- [][]interface{}, wg *sync.WaitGroup) {
 	var pack *PipelinePack
 
 	ticker := time.Tick(time.Duration(o.flushInterval) * time.Millisecond)
@@ -120,18 +126,20 @@ func (o *PostgresOutput) receiver(
 
 	for ok := true; ok; {
 		select {
-		case pack, ok = <-or.InChan():
+		case pack, ok = <-o.runner.InChan():
 			if !ok {
 				// Closed inChan => we're shutting down, flush data
 				committers <- batch
 				close(committers)
 				break
 			}
+
 			// Read values from message fields
 			vals, err := o.convertMessageToValues(pack.Message, o.insertMessageFields)
 			pack.Recycle()
+
 			if err != nil {
-				or.LogError(err)
+				o.runner.LogError(err)
 			} else {
 				batch = append(batch, vals)
 				if len(batch) >= o.flushCount {
@@ -150,11 +158,7 @@ func (o *PostgresOutput) receiver(
 // Runs in a separate goroutine, waits for buffered data on the committer
 // channel, bulk inserts it into Postgres, and puts the now empty buffer on the
 // return channel for reuse.
-func (o *PostgresOutput) makeCommitters(
-	or OutputRunner,
-	count int,
-	wg *sync.WaitGroup,
-) chan<- [][]interface{} {
+func (o *PostgresOutput) makeCommitters(count int, wg *sync.WaitGroup) chan<- [][]interface{} {
 	batches := make(chan [][]interface{})
 
 	for i := 0; i < count; i++ {
@@ -165,14 +169,14 @@ func (o *PostgresOutput) makeCommitters(
 					continue
 				}
 
-				done := o.commit(or, batch)
+				done := o.commit(batch)
 				timeout := time.NewTimer(time.Minute)
 
 				select {
 				case <-done:
 					timeout.Stop()
 				case <-timeout.C:
-					or.LogError(errors.New("Postgres insert took more than 60s."))
+					o.runner.LogError(errors.New("Postgres insert took more than 60s."))
 				}
 			}
 			wg.Done()
@@ -182,13 +186,13 @@ func (o *PostgresOutput) makeCommitters(
 	return batches
 }
 
-func (o *PostgresOutput) commit(or OutputRunner, batch [][]interface{}) <-chan struct{} {
+func (o *PostgresOutput) commit(batch [][]interface{}) <-chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
 		err := o.db.Insert(o.insertSchema, o.insertTable, o.insertTableColumns, batch)
 		if err != nil {
-			or.LogError(err)
+			o.runner.LogError(err)
 		}
 		done <- struct{}{}
 	}()
