@@ -14,15 +14,17 @@ import (
 
 type PostgresOutput struct {
 	db                        *postgres.PostgresDB
+	helper                    PluginHelper
+	runner                    OutputRunner
+	lastMsgLoopCount          uint
 	insertSchema              string
 	insertTable               string
 	insertMessageFields       []string
 	insertTableColumns        []string
-	batchChan                 chan [][]interface{}
-	backChan                  chan [][]interface{}
 	flushInterval             uint32
 	flushCount                int // Max messages before flush
 	allowMissingMessageFields bool
+	queryTimeout              uint32
 }
 
 type PostgresOutputConfig struct {
@@ -49,6 +51,9 @@ type PostgresOutputConfig struct {
 	FlushInterval uint32 `toml:"flush_interval"`
 	// Number of messages that triggers a write to Postgres (default 10000)
 	FlushCount int `toml:"flush_count"`
+	// The time in milliseconds that the plugin will wait before giving up
+	// on a Postgres query (defaults to 60000, i.e. 1 minute)
+	QueryTimeout uint32 `toml:"query_timeout"`
 }
 
 func (po *PostgresOutput) ConfigStruct() interface{} {
@@ -60,6 +65,7 @@ func (po *PostgresOutput) ConfigStruct() interface{} {
 		FlushInterval:             uint32(1000),
 		FlushCount:                10000,
 		InsertSchema:              "public",
+		QueryTimeout:              uint32(60000),
 	}
 }
 
@@ -67,8 +73,7 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 	config := rawConf.(*PostgresOutputConfig)
 	po.flushInterval = config.FlushInterval
 	po.flushCount = config.FlushCount
-	po.batchChan = make(chan [][]interface{})
-	po.backChan = make(chan [][]interface{}, 2)
+	po.queryTimeout = config.QueryTimeout
 	po.insertSchema = config.InsertSchema
 	po.insertTable = config.InsertTable
 	if config.InsertMessageFields == "" {
@@ -80,7 +85,6 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 	}
 	po.insertTableColumns = strings.Split(config.InsertTableColumns, " ")
 	po.allowMissingMessageFields = config.AllowMissingMessageFields
-
 	p := postgres.DBConnectionParams{
 		Host:           config.DBHost,
 		Port:           config.DBPort,
@@ -101,10 +105,16 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 
 func (o *PostgresOutput) Run(or OutputRunner, h PluginHelper) (err error) {
 	defer o.db.Close()
+
+	o.runner = or
+	o.helper = h
+
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go o.receiver(or, &wg)
-	go o.committer(or, &wg)
+	wg.Add(1)
+
+	committers := o.makeCommitters(5, &wg)
+	go o.receiver(committers, &wg)
+
 	wg.Wait()
 	return
 }
@@ -112,52 +122,40 @@ func (o *PostgresOutput) Run(or OutputRunner, h PluginHelper) (err error) {
 // Runs in a separate goroutine, accepting incoming messages, buffering output
 // data until the ticker triggers the buffered data should be put onto the
 // committer channel.
-func (o *PostgresOutput) receiver(or OutputRunner, wg *sync.WaitGroup) {
-	var (
-		pack  *PipelinePack
-		count int
-	)
-	ok := true
-	ticker := time.Tick(time.Duration(o.flushInterval) * time.Millisecond)
-	outBatch := [][]interface{}{}
-	inChan := or.InChan()
+func (o *PostgresOutput) receiver(committers chan<- [][]interface{}, wg *sync.WaitGroup) {
+	var pack *PipelinePack
 
-	for ok {
+	ticker := time.Tick(time.Duration(o.flushInterval) * time.Millisecond)
+	batch := [][]interface{}{}
+
+	for ok := true; ok; {
 		select {
-		case pack, ok = <-inChan:
+		case pack, ok = <-o.runner.InChan():
 			if !ok {
 				// Closed inChan => we're shutting down, flush data
-				if len(outBatch) > 0 {
-					o.batchChan <- outBatch
-				}
-				close(o.batchChan)
+				committers <- batch
+				close(committers)
 				break
 			}
+
 			// Read values from message fields
-			val, e := o.convertMessageToValues(pack.Message, o.insertMessageFields)
+			vals, err := o.convertMessageToValues(pack.Message, o.insertMessageFields)
+
+			o.lastMsgLoopCount = pack.MsgLoopCount // here to help prevent infinite error loops
 			pack.Recycle()
-			if e != nil {
-				or.LogError(e)
+
+			if err != nil {
+				o.logError(err)
 			} else {
-				outBatch = append(outBatch, val)
-				if count = count + 1; o.CheckFlush(count, len(outBatch)) {
-					if len(outBatch) > 0 {
-						// This will block until the other side is ready to accept
-						// this batch, so we can't get too far ahead.
-						o.batchChan <- outBatch
-						outBatch = <-o.backChan
-						count = 0
-					}
+				batch = append(batch, vals)
+				if len(batch) >= o.flushCount {
+					committers <- batch
+					batch = [][]interface{}{}
 				}
 			}
 		case <-ticker:
-			if len(outBatch) > 0 {
-				// This will block until the other side is ready to accept
-				// this batch, freeing us to start on the next one.
-				o.batchChan <- outBatch
-				outBatch = <-o.backChan
-				count = 0
-			}
+			committers <- batch
+			batch = [][]interface{}{}
 		}
 	}
 	wg.Done()
@@ -166,26 +164,46 @@ func (o *PostgresOutput) receiver(or OutputRunner, wg *sync.WaitGroup) {
 // Runs in a separate goroutine, waits for buffered data on the committer
 // channel, bulk inserts it into Postgres, and puts the now empty buffer on the
 // return channel for reuse.
-func (o *PostgresOutput) committer(or OutputRunner, wg *sync.WaitGroup) {
-	initBatch := [][]interface{}{}
-	o.backChan <- initBatch
-	var outBatch [][]interface{}
+func (o *PostgresOutput) makeCommitters(count int, wg *sync.WaitGroup) chan<- [][]interface{} {
+	batches := make(chan [][]interface{})
 
-	for outBatch = range o.batchChan {
-		if err := o.db.Insert(o.insertSchema, o.insertTable, o.insertTableColumns, outBatch); err != nil {
-			or.LogError(err)
-		}
-		outBatch = outBatch[:0]
-		o.backChan <- outBatch
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(i int) {
+			for batch := range batches {
+				if len(batch) <= 0 {
+					continue
+				}
+
+				done := o.commit(batch)
+				timeout := time.NewTimer(time.Duration(o.queryTimeout) * time.Millisecond)
+
+				select {
+				case <-done:
+					timeout.Stop()
+				case <-timeout.C:
+					o.logError(fmt.Errorf("Postgres insert took more than %dms.", o.queryTimeout))
+				}
+			}
+			wg.Done()
+		}(i)
 	}
-	wg.Done()
+
+	return batches
 }
 
-func (o *PostgresOutput) CheckFlush(count int, length int) bool {
-	if count >= o.flushCount {
-		return true
-	}
-	return false
+func (o *PostgresOutput) commit(batch [][]interface{}) <-chan struct{} {
+	done := make(chan struct{})
+
+	go func() {
+		err := o.db.Insert(o.insertSchema, o.insertTable, o.insertTableColumns, batch)
+		if err != nil {
+			o.logError(err)
+		}
+		done <- struct{}{}
+	}()
+
+	return done
 }
 
 // convertMessageToValue reads a Heka Message and returns a slice of field values
@@ -218,6 +236,23 @@ func (po *PostgresOutput) convertMessageToValues(m *message.Message, insertField
 	}
 
 	return fieldValues, nil
+}
+
+// Injects a pack with an error message back into the heka pipeline so it can be alerted on
+func (po *PostgresOutput) logError(err error) {
+	pack := po.helper.PipelinePack(po.lastMsgLoopCount)
+	if pack == nil {
+		err = fmt.Errorf(
+			"system.postgres-output exceeded MaxMsgLoops = %d, err: %s",
+			po.lastMsgLoopCount, err.Error(),
+		)
+		po.runner.LogError(err)
+		return
+	}
+	pack.Message.SetLogger(po.runner.Name())
+	pack.Message.SetType("system.postgres-output")
+	pack.Message.SetPayload(err.Error())
+	go func() { po.helper.PipelineConfig().Router().InChan() <- pack }() // Don't block sending
 }
 
 func init() {
