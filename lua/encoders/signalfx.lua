@@ -97,8 +97,9 @@ local function sub_func(key)
 end
 
 function process_message()
-    local ts = read_message("Timestamp") / 1e9
+    local ts = tonumber(read_message("Timestamp"))
     if not ts then return -1 end
+    ts = ts / 1e6 -- Convert nanoseconds to milliseconds
 
     local value = read_message("Fields["..value_field.."]")
 
