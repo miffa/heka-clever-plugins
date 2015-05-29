@@ -121,12 +121,16 @@ function process_message()
     if not name or name == "" then return -1 end
 
     local output = {
+        -- array of data points
         [stat_type] = {
+            {
                 metric=name,
                 value=value,
-                timestamp=ts
-                -- TODO: send dimensions, describe data in more detail
-                -- "dimensions": {},
+                timestamp=ts,
+                dimensions={
+                    hostname=Hostname
+                }
+            }
         }
     }
 
