@@ -121,18 +121,20 @@ function process_message()
     end
     if not name or name == "" then return -1 end
 
-    local output = {
-        -- array of data points
-        [stat_type] = {
-            {
-                metric=name,
-                value=value,
-                timestamp=ts,
-                dimensions={
-                    hostname=Hostname
-                }
-            }
+    -- single data point
+    -- TODO: Batch these, grouping by 'counter' or 'gauge'
+    local datum = {
+        metric=name,
+        value=value,
+        timestamp=ts,
+        dimensions={
+            hostname=Hostname
         }
+    }
+
+    local output = {
+        -- list of 'counter' or 'gauge' data points
+        [stat_type] = { datum }
     }
 
     inject_payload("json", "signalfx", cjson.encode(output))
