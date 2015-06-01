@@ -38,6 +38,18 @@ Config:
 - stat_type (string, optional, defaults to "counter")
     A metric can be of type "counter" or "gauge".
 
+- dimensions (string, optional, defaults to "")
+    A space delimited list of field names. Each of these will be written as
+    "dimensions" on the SignalFx data point, which you can filter by in SignalFx.
+    For example, a value of "Hostname Severity" would write the field
+
+        "dimensions": {
+            "Hostname": "my-hostname.example.com",
+            "Severity": 0
+        }
+
+    for the datapoint.
+
 *Example Heka Configuration*
 
 .. code-block:: ini
@@ -68,6 +80,7 @@ require "table"
 
 local metric_name = read_config("metric_name")
 local value_field = read_config("value_field") or "value"
+local dimensions_str = read_config("dimensions") or ""
 
 local use_subs
 if string.find(metric_name, "%%{[%w%p]-}") then
@@ -96,6 +109,15 @@ local function sub_func(key)
     end
 end
 
+local function get_dimensions(s)
+  local dims = {}
+  -- TODO: make sure matcher supports all possible field names
+  for i in string.gmatch(s, "%S+") do
+    dims[i] = sub_func(i)
+  end
+  return dims
+end
+
 function process_message()
     local ts = tonumber(read_message("Timestamp"))
     if not ts then return -1 end
@@ -121,15 +143,16 @@ function process_message()
     end
     if not name or name == "" then return -1 end
 
+    -- Read custom dimensions from message
+    local dims = get_dimensions(dimensions_str)
+
     -- single data point
     -- TODO: Batch these, grouping by 'counter' or 'gauge'
     local datum = {
         metric=name,
         value=value,
         timestamp=ts,
-        dimensions={
-            hostname=Hostname
-        }
+        dimensions=dims
     }
 
     local output = {
