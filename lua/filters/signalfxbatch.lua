@@ -1,8 +1,6 @@
-cjson = require "cjson"
+require "cjson"
 require "string"
 require "table"
-package.path = package.path .. ";../?.lua" -- Allow requiring from parent folder
-util = require "modules.util"
 
 local metric_name = read_config("metric_name")
 local value_field = read_config("value_field") or "value"
@@ -14,11 +12,34 @@ if string.find(metric_name, "%%{[%w%p]-}") then
     use_subs = true
 end
 
+local base_fields_map = {
+    Type = true,
+    Payload = true,
+    Hostname = true,
+    Pid = true,
+    Logger = true,
+    Severity = true,
+    EnvVersion = true
+}
+
+-- Allows interpolating message fields into a string.
+-- Used to make custom metric names.
+local function sub_func(key)
+    if base_fields_map[key] then
+        return read_message(key)
+    else
+        local val = read_message("Fields["..key.."]")
+        if val then
+            return val end
+        return "%{"..key.."}"
+    end
+end
+
 local function get_dimensions(s)
   local dims = {}
   -- TODO: make sure matcher supports all possible field names
   for i in string.gmatch(s, "%S+") do
-    dims[i] = util.sub_func(i)
+    dims[i] = sub_func(i)
   end
   return dims
 end
@@ -59,7 +80,7 @@ function process_message()
     -- only process name if everything looks good
     local name = ""
     if use_subs then
-        name = string.gsub(metric_name, "%%{([%w%p]-)}", util.sub_func)
+        name = string.gsub(metric_name, "%%{([%w%p]-)}", sub_func)
     else
         name = metric_name
     end
