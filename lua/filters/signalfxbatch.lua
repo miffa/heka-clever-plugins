@@ -50,10 +50,11 @@ batch_max_count = read_config("max_count") or 20
 
 function flush()
    if #counters > 0 or #gauges > 0 then
-      local output = {
-        counter = { counters },
-        gauge = { gauges }
-      }
+      local output = {}
+      -- Only add to output if > 0, else Lua adds empty dict {} instead of empty array []
+      if #counters > 0 then output.counter = counters end
+      if #gauges > 0 then output.gauge = gauges end
+
       inject_payload("json", msg_type, cjson.encode(output))
       counters = {}
       gauges = {}
