@@ -82,6 +82,7 @@ Config:
 require "cjson"
 require "string"
 require "table"
+require "math"
 
 local metric_name = read_config("metric_name")
 local value_field = read_config("value_field") or "value"
@@ -146,7 +147,7 @@ end
 function process_message()
     local ts = tonumber(read_message("Timestamp"))
     if not ts then return -1 end
-    ts = ts / 1e6 -- Convert nanoseconds to milliseconds
+    ts = math.floor(ts / 1e6) -- Convert nanoseconds to milliseconds
 
     local value = read_message("Fields["..value_field.."]")
 
