@@ -1,6 +1,6 @@
 image: go1.2
 services:
-  - postgres
+- postgres
 notify:
   email:
     recipients:
@@ -12,9 +12,4 @@ notify:
     room: Clever-Dev-CI
     token: {{hipchatToken}}
 script:
-  - createdb -h localhost -U postgres drone
-  - psql -U postgres -h localhost -c "CREATE TABLE \"mock_table\" (s text, i int)" drone
-  - cd postgres
-  - go get ./...
-  - go get github.com/stretchr/testify/assert
-  - go test
+- ./test_drone.sh
