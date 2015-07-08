@@ -37,18 +37,26 @@ Config:
 - msg_type (string, optional, defaults to "signalfxbatch")
     `Type` of the message outputted from this filter.
 
-- dimensions (string, optional, defaults to "")
-    A space delimited list of field names. Each of these will be written as
-    "dimensions" on the SignalFx data point, which you can filter by in SignalFx.
-    For example, a value of "Hostname Severity" would write the field
+- skip_fields (string, optional, default "")
+    Space delimited set of fields that should *not* be included in the
+    Signalfx dimensions being generated.
+
+    For example, if you include all default fieldnames, your dimensions might
+    look like:
 
         "dimensions": {
             "Hostname": "my-hostname.example.com",
-            "Severity": 0
+            "Severity": "0",
+            ...
         }
 
-    for the datapoint.
+    Note: all dimensions are written as strings to SignalFx, which is required
+    by their API.
 
+    Fieldname values of "Type", "Payload", "Hostname", "Pid", "Logger", "Severity", or "EnvVersion"
+    will be assumed to refer to the corresponding field from the base message
+    schema, any other values will be assumed to refer to a dynamic message
+    field.
 
 - max_count (int, optional, defaults to 20)
     Max number of messages before a batch is flushed from the filter.
@@ -65,7 +73,7 @@ Config:
        [SignalfxBatchFilter.config]
        metric_name = "test-metric.%{title}.%{Hostname}"
        value_field = "metric_value"
-       dimensions = "Hostname Severity"
+       skip_fields = "Hostname Severity"
        max_count = 5
 
     [SignalfxHttpOutput]
@@ -86,9 +94,9 @@ require "math"
 
 local metric_name = read_config("metric_name")
 local value_field = read_config("value_field") or "value"
-local dimensions_str = read_config("dimensions") or ""
 local msg_type = read_config("msg_type") or "signalfxbatch"
 local batch_max_count = read_config("max_count") or 20
+local skip_fields_str = read_config("skip_fields") or ""
 
 local use_subs
 if string.find(metric_name, "%%{[%w%p]-}") then
@@ -118,13 +126,57 @@ local function sub_func(key)
     end
 end
 
-local function get_dimensions(s)
-  local dims = {}
-  -- TODO: make sure matcher supports all possible field names
-  for i in string.gmatch(s, "%S+") do
-    dims[i] = tostring(sub_func(i))
-  end
-  return dims
+-- Remove blacklisted fields from the set of base fields that we use, and
+-- create a table of dynamic fields to skip.
+local skip_fields_str = read_config("skip_fields")
+
+local function get_field_values(skip_fields_str)
+    -- returns a table of key-val mappings
+    -- i.e. { "field": 1, "field2", "other value", ... }
+    --
+    -- `skip_fields_str` is a space delimited set of fields that should *not* be included
+
+    output = {}
+
+    -- Determine fields to skip
+    local skip_fields = {}
+    if skip_fields_str then
+        for field in string.gmatch(skip_fields_str, "[%S]+") do
+            skip_fields[field] = true
+        end
+    end
+
+    -- Read Heka base fields
+    for base_field, _ in pairs(base_fields_map) do
+        -- Skip fields specified by user
+        if not skip_fields[base_field] then
+            output[base_field] = read_message(base_field)
+        end
+    end
+
+    -- Read Heka non-base fields
+    while true do
+        local typ, name, value, representation, count = read_next_field()
+        if not typ then break end -- No more fields
+
+        if typ ~= 1 then -- exclude bytes
+            -- Skip fields specified by user
+            if not skip_fields[name] then
+                output[name] = value
+            end
+        end
+    end
+
+    return output
+end
+
+local function get_dimensions(keyvals)
+    output = {}
+    for k, v in pairs(keyvals) do
+        output[k] = tostring(v)
+    end
+
+    return output
 end
 
 local counters = {}
@@ -169,8 +221,11 @@ function process_message()
     end
     if not name or name == "" then return -1 end
 
-    -- Read custom dimensions from message
-    local dims = get_dimensions(dimensions_str)
+    -- Read specific fields from message from message
+    local field_values = get_field_values(skip_fields_str)
+
+    -- Convert fields to valid SignalFx dimensions
+    local dims = get_dimensions(field_values)
 
     -- single data point
     local datum = {
