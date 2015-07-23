@@ -114,15 +114,6 @@ local remove      = create_table(remove_str)
 local override    = create_table(override_str)
 local rename      = create_table(rename_str)
 
--- For a given value
-local function interpolate_field_values(v)
-    local out = v
-    if string.find(v, "%%{[%w%p]-}") then
-        out = string.gsub(v, "%%{([%w%p]-)}", interpolate_func)
-    end
-    return out
-end
-
 -- Used for interpolating message fields into series name.
 local function interpolate_func(key)
     local val = read_message("Fields["..key.."]")
@@ -130,6 +121,15 @@ local function interpolate_func(key)
         return val
     end
     return "%{"..key.."}"
+end
+
+-- For a given value
+local function interpolate_field_values(v)
+    local out = tostring(v)
+    if string.find(out, "%%{[%w%p]-}") then
+        out = string.gsub(out, "%%{([%w%p]-)}", interpolate_func)
+    end
+    return out
 end
 
 function process_message ()
