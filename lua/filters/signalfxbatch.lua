@@ -154,7 +154,7 @@ function process_message()
     -- assume stat_type is a counter unless gauge is specified
     local stat_type = read_message("Fields[type]")
     if stat_type == "gauge" then
-        if not value then return -1 end
+        if not value then value = 0 end -- default gauge to 0
     else
         stat_type = "counter"
         if not value then value = 1 end -- default counter to 1
