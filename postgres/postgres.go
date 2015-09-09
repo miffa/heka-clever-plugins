@@ -77,7 +77,7 @@ func buildInsertQuery(schema, table string, columns []string, values [][]interfa
 				q += ", "
 			}
 			q += "$"
-			q += fmt.Sprintf("%d", valIdx*columnCount+fieldIdx+1)
+			q += fmt.Sprintf("%d", uint64(valIdx)*uint64(columnCount)+uint64(fieldIdx)+1)
 		}
 		q += ")"
 	}

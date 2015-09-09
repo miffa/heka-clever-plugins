@@ -13,7 +13,6 @@ func TestAllSpecs(t *testing.T) {
 
 	r.AddSpec(KeenOutputSpec)
 	r.AddSpec(JsonDecoderSpec)
-	r.AddSpec(FieldEncoderSpec)
 
 	gs.MainGoTest(r, t)
 }
