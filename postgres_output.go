@@ -52,7 +52,7 @@ type PostgresOutputConfig struct {
 	// Number of messages that triggers a write to Postgres (default 10000)
 	FlushCount int `toml:"flush_count"`
 	// The time in milliseconds that the plugin will wait before giving up
-	// on a Postgres query (defaults to 60000, i.e. 1 minute)
+	// on a Postgres query (defaults to 300000, i.e. 5 minute)
 	QueryTimeout uint32 `toml:"query_timeout"`
 }
 
@@ -65,7 +65,7 @@ func (po *PostgresOutput) ConfigStruct() interface{} {
 		FlushInterval:             uint32(1000),
 		FlushCount:                10000,
 		InsertSchema:              "public",
-		QueryTimeout:              uint32(60000),
+		QueryTimeout:              uint32(300000),
 	}
 }
 
