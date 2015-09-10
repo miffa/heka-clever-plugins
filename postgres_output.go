@@ -99,10 +99,10 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 		SSLMode:        config.DBSSLMode,
 	}
 
-	// since Redshift does not allow more than 32767 params, the query should be flushed
+	// since Redshift does not allow more than `redshiftParamsLimit` params, the query should be flushed
 	// before the number of params crosses that amount
-	if po.flushCount*len(po.insertTableColumns) > 32767 {
-		po.flushCount = int(32767 / len(po.insertTableColumns))
+	if po.flushCount*len(po.insertTableColumns) > redshiftParamsLimit {
+		po.flushCount = int(redshiftParamsLimit / len(po.insertTableColumns))
 	}
 
 	db, err := postgres.New(&p)
