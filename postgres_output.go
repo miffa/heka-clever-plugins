@@ -12,6 +12,10 @@ import (
 	. "github.com/mozilla-services/heka/pipeline"
 )
 
+// Redshift does not allow more than 32767 params in a query, so queries of type INSERT...VALUES($1, $2, ...)
+// will not work if the number of params crosses 32767
+const redshiftParamsLimit = 32767
+
 type PostgresOutput struct {
 	db                        *postgres.PostgresDB
 	helper                    PluginHelper
@@ -63,7 +67,7 @@ func (po *PostgresOutput) ConfigStruct() interface{} {
 		DBMaxOpenConnections:      10,
 		DBSSLMode:                 "require",
 		FlushInterval:             uint32(1000),
-		FlushCount:                10000,
+		FlushCount:                5000,
 		InsertSchema:              "public",
 		QueryTimeout:              uint32(300000),
 	}
@@ -94,6 +98,13 @@ func (po *PostgresOutput) Init(rawConf interface{}) error {
 		ConnectTimeout: config.DBConnectionTimeout,
 		SSLMode:        config.DBSSLMode,
 	}
+
+	// since Redshift does not allow more than `redshiftParamsLimit` params, the query should be flushed
+	// before the number of params crosses that amount
+	if po.flushCount*len(po.insertTableColumns) > redshiftParamsLimit {
+		po.flushCount = int(redshiftParamsLimit / len(po.insertTableColumns))
+	}
+
 	db, err := postgres.New(&p)
 	if err != nil {
 		return err
