@@ -139,8 +139,6 @@ Config:
 
 --]=]
 
---local ts_line_protocol = require "ts_line_protocol"
-
 local decode_message = decode_message
 local ipairs = ipairs
 local math = require "math"
@@ -166,6 +164,11 @@ local interp_fields = {
     Severity = "Severity"
 }
 
+------------------------
+--
+--  msg_interpolate.lua
+--
+------------------------
 local function interpolate_match(match)
     -- First see if it's a primary message schema field.
     local fname = interp_fields[match]
@@ -193,6 +196,18 @@ function interpolate_from_msg(value, secs)
     _secs = secs
     return string.gsub(value, pattern, interpolate_match)
 end
+
+-------------------------------
+--
+--  End of msg_interpolate.lua
+--
+-------------------------------
+
+------------------------
+--
+--  field_util.lua
+--
+------------------------
 
 base_fields_list = {
     EnvVersion = true,
@@ -264,6 +279,7 @@ function message_timestamp(timestamp_precision)
     return message_timestamp
 end
 
+-- Modified from original to find fields not in skip fields
 function used_fields(base_fields, skip_fields)
     local fields = {}
     if skip_fields then
@@ -280,6 +296,7 @@ local function influxdb_kv_fmt(string)
     return tostring(string):gsub("([ ,])", "\\%1")
 end
 
+-- Added utility function to get field values as a table
 local function get_field_values(enabled_base_fields)
     local columns = {}
     local values = {}
@@ -321,7 +338,19 @@ local function get_field_values(enabled_base_fields)
     end
     return values
 end
+--------------------------
+--
+--  End of field_util.lua
+--
+--------------------------
 
+------------------------
+--
+--  ts_line_protocol.lua
+--
+------------------------
+
+-- Modified to handle extra config and change handling of tag fields
 local function points_tags_tables(config)
     local name_prefix = config.name_prefix or ""
     if config.interp_name_prefix then
@@ -415,8 +444,6 @@ local function points_tags_tables(config)
 
     return points, tags
 end
-
---[[ Public Interface]]
 
 function carbon_line_msg(config)
     local api_message = {}
@@ -540,6 +567,12 @@ local decoder_config = {
     timestamp_precision = read_config("timestamp_precision") or "ms",
     value_field_key = read_config("value_field_key") or "value"
 }
+
+--------------------------------
+--
+--  End of ts_line_protocol.lua
+--
+--------------------------------
 
 local config = set_config(decoder_config)
 
