@@ -6,8 +6,9 @@
 --[=[
 Converts full Heka message contents to JSON for InfluxDB HTTP API, batches all
 messages seen in ticker_interval, and outputs a new heka message.  The new message
-has Fields[payload_name] equal to 'influxdbbatch'. Each JSON object includes
-all standard message fields and all of the dynamically
+has Fields[payload_name] equal to 'influxdbbatch', unless overrideen in config.
+
+Each JSON object includes all standard message fields and all of the dynamically
 specified fields, skipping any bytes fields or any fields explicitly omitted
 using the `skip_fields` config option.
 
@@ -34,6 +35,9 @@ Config:
     schema, any other values will be assumed to refer to a dynamic message
     field.
 
+- payload_name (string, optional, default "influxdbbatch")
+    Sets the value of Fields[payload_name] on each message.
+
 
 *Example Heka Configuration*
 
@@ -47,7 +51,7 @@ Config:
         [influxdbbatch.config]
         series = "heka.%{Logger}"
         skip_fields = "Pid EnvVersion"
-        
+
     [InfluxOutput]
     message_matcher = "Fields[payload_name] == 'influxdbbatch'"
     encoder = "influxdb"
@@ -68,6 +72,7 @@ require "cjson"
 require "string"
 require "table"
 
+local payload_name = read_config("payload_name") or "influxdbbatch"
 local series_orig  = read_config("series") or "series"
 local series = series_orig
 local use_subs
@@ -192,7 +197,7 @@ function process_message()
     }
     table.insert(encoded_messages, output)
     if #encoded_messages == batch_max_count then
-       inject_payload("json", "influxdbbatch", cjson.encode(encoded_messages))
+       inject_payload("json", payload_name, cjson.encode(encoded_messages))
        encoded_messages = {}
     end
     return 0
@@ -202,7 +207,7 @@ function timer_event(ns)
    -- details of the lua sandbox guarantee that this timer
    -- does not get called in the middle of a process_message call
    if #encoded_messages > 0 then
-      inject_payload("json","influxdbbatch",cjson.encode(encoded_messages))
+      inject_payload("json", payload_name, cjson.encode(encoded_messages))
       encoded_messages = {}
    end
 end
