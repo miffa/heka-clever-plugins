@@ -190,8 +190,6 @@ local function interpolate_match(match)
     end
 end
 
---[[ Public Interface --]]
-
 function interpolate_from_msg(value, secs)
     _secs = secs
     return string.gsub(value, pattern, interpolate_match)
@@ -241,8 +239,6 @@ local function timestamp_divisor(timestamp_precision)
     end
     return timestamp_divisor
 end
-
---[[ Public Interface --]]
 
 function field_map(fields_str)
     local fields = {}
@@ -579,6 +575,10 @@ local config = set_config(decoder_config)
 api_messages = {}
 batch_max_count = read_config("max_count") or 20
 
+--
+-- Public Interface 
+--
+
 function process_message()
     -- Inject a new message with the payload populated with the newline
     -- delimited data points, and append a newline at the end for the last line
@@ -609,3 +609,7 @@ function timer_event(ns)
       api_messages = {}
    end
 end
+
+--
+-- END Public Interface
+--
