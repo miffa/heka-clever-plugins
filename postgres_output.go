@@ -153,7 +153,7 @@ func (o *PostgresOutput) receiver(committers chan<- [][]interface{}, wg *sync.Wa
 			vals, err := o.convertMessageToValues(pack.Message, o.insertMessageFields)
 
 			o.lastMsgLoopCount = pack.MsgLoopCount // here to help prevent infinite error loops
-			pack.Recycle()
+			pack.Recycle(err)
 
 			if err != nil {
 				o.logError(err)
@@ -251,8 +251,8 @@ func (po *PostgresOutput) convertMessageToValues(m *message.Message, insertField
 
 // Injects a pack with an error message back into the heka pipeline so it can be alerted on
 func (po *PostgresOutput) logError(err error) {
-	pack := po.helper.PipelinePack(po.lastMsgLoopCount)
-	if pack == nil {
+	pack, e := po.helper.PipelinePack(po.lastMsgLoopCount)
+	if e != nil {
 		err = fmt.Errorf(
 			"system.postgres-output exceeded MaxMsgLoops = %d, err: %s",
 			po.lastMsgLoopCount, err.Error(),

@@ -122,7 +122,6 @@ func decodeMessageAndVerifyOutput(c gs.Context, conf *JsonDecoderConfig, payload
 }
 
 func Test_KeyvalSpecs(t *testing.T) {
-	universalT = t
 	r := gs.NewRunner()
 	r.Parallel = false
 

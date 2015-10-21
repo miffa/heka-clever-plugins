@@ -7,11 +7,9 @@ import (
 )
 
 func TestAllSpecs(t *testing.T) {
-	universalT = t
 	r := gs.NewRunner()
 	r.Parallel = false
 
-	r.AddSpec(KeenOutputSpec)
 	r.AddSpec(JsonDecoderSpec)
 
 	gs.MainGoTest(r, t)
