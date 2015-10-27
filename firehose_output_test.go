@@ -16,7 +16,7 @@ func TestRun(t *testing.T) {
 
 	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
 	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
-	mockFirehose := NewMockFirehose(mockCtrl)
+	mockFirehose := NewMockRecordPutter(mockCtrl)
 
 	firehoseOutput := FirehoseOutput{
 		client: mockFirehose,
@@ -38,7 +38,7 @@ func TestRun(t *testing.T) {
 		close(testChan)
 	}()
 
-	mockFirehose.EXPECT().Send([]byte(input)).Return(nil)
+	mockFirehose.EXPECT().PutRecord([]byte(input)).Return(nil)
 
 	err := firehoseOutput.Run(mockOR, mockPH)
 	assert.NoError(t, err, "did not expect err for valid Run()")

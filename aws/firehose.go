@@ -1,35 +1,68 @@
 package aws
 
 import (
+	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/firehose"
-	. "github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
+	iface "github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
 )
 
-type Firehose interface {
-	Send(data []byte) error
+// RecordPutter is the interface for sending data to a delivery stream
+type RecordPutter interface {
+	PutRecord(record []byte) error
+	PutRecordBatch(records [][]byte) error
 }
 
-type firehoseConfig struct {
-	client FirehoseAPI
+// Firehose represents a single aws Firehose stream
+type Firehose struct {
+	client iface.FirehoseAPI
 	stream string
 }
 
-func NewFirehose(region, stream string) Firehose {
+// NewFirehose returns a configured Firehose object
+func NewFirehose(region, stream string) *Firehose {
 	awsConfig := aws.NewConfig().WithRegion(region)
-	return &firehoseConfig{
+	return &Firehose{
 		client: firehose.New(awsConfig),
 		stream: stream,
 	}
 }
 
-func (f firehoseConfig) Send(data []byte) error {
+// PutRecord sends a single record to the Firehose stream
+func (f Firehose) PutRecord(record []byte) error {
 	input := &firehose.PutRecordInput{
 		DeliveryStreamName: &f.stream,
 		Record: &firehose.Record{
-			Data: data,
+			Data: record,
 		},
 	}
 	_, err := f.client.PutRecord(input)
 	return err
+}
+
+// PutRecordBatch sends an array of records to the Firehose stream
+// as a single batch request
+func (f Firehose) PutRecordBatch(records [][]byte) error {
+	// Construct the array of firehose.Records
+	awsRecords := make([]*firehose.Record, len(records))
+	for idx, record := range records {
+		awsRecords[idx] = &firehose.Record{
+			Data: record,
+		}
+	}
+
+	input := &firehose.PutRecordBatchInput{
+		DeliveryStreamName: &f.stream,
+		Records:            awsRecords,
+	}
+	res, err := f.client.PutRecordBatch(input)
+	if err != nil {
+		return err
+	}
+	// Check for any individual records failing
+	if *res.FailedPutCount != 0 {
+		return fmt.Errorf("%d records failed to upload", *res.FailedPutCount)
+	}
+	return nil
 }

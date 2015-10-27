@@ -9,12 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidSend(t *testing.T) {
+func TestValidPutRecord(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	mockFirehoseAPI := NewMockFirehoseAPI(mockCtrl)
 
-	f := firehoseConfig{
+	f := Firehose{
 		client: mockFirehoseAPI,
 		stream: "test",
 	}
@@ -27,9 +27,10 @@ func TestValidSend(t *testing.T) {
 		},
 	}
 
+	// Return success
 	mockFirehoseAPI.EXPECT().PutRecord(expectedInput).Return(&firehose.PutRecordOutput{}, nil)
 
-	err := f.Send(data)
+	err := f.PutRecord(data)
 	assert.NoError(t, err, "valid Send() failed")
 }
 
@@ -38,7 +39,7 @@ func TestInvalidSend(t *testing.T) {
 	defer mockCtrl.Finish()
 	mockFirehoseAPI := NewMockFirehoseAPI(mockCtrl)
 
-	f := firehoseConfig{
+	f := Firehose{
 		client: mockFirehoseAPI,
 		stream: "test",
 	}
@@ -51,8 +52,77 @@ func TestInvalidSend(t *testing.T) {
 		},
 	}
 
+	// Return error
 	mockFirehoseAPI.EXPECT().PutRecord(expectedInput).Return(nil, errors.New("test error"))
 
-	err := f.Send(data)
+	err := f.PutRecord(data)
+	assert.Error(t, err, "expected invalid Send() to fail")
+}
+
+func TestValidPutRecordBatch(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockFirehoseAPI := NewMockFirehoseAPI(mockCtrl)
+
+	f := Firehose{
+		client: mockFirehoseAPI,
+		stream: "test",
+	}
+
+	data := [][]byte{
+		[]byte("test"),
+		[]byte("test"),
+	}
+
+	expectedInput := &firehose.PutRecordBatchInput{
+		DeliveryStreamName: &f.stream,
+		Records: []*firehose.Record{
+			&firehose.Record{
+				Data: data[0],
+			},
+			&firehose.Record{
+				Data: data[1],
+			},
+		},
+	}
+
+	// Return success
+	mockFirehoseAPI.EXPECT().PutRecord(expectedInput).Return(&firehose.PutRecordOutput{}, nil)
+
+	err := f.PutRecordBatch(data)
+	assert.NoError(t, err, "valid Send() failed")
+}
+
+func TestInvalidPutRecordBatch(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockFirehoseAPI := NewMockFirehoseAPI(mockCtrl)
+
+	f := Firehose{
+		client: mockFirehoseAPI,
+		stream: "test",
+	}
+
+	data := [][]byte{
+		[]byte("test"),
+		[]byte("test"),
+	}
+
+	expectedInput := &firehose.PutRecordBatchInput{
+		DeliveryStreamName: &f.stream,
+		Records: []*firehose.Record{
+			&firehose.Record{
+				Data: data[0],
+			},
+			&firehose.Record{
+				Data: data[1],
+			},
+		},
+	}
+
+	// Return error
+	mockFirehoseAPI.EXPECT().PutRecordBatch(expectedInput).Return(nil, errors.New("test error"))
+
+	err := f.PutRecordBatch(data)
 	assert.Error(t, err, "expected invalid Send() to fail")
 }

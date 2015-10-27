@@ -7,33 +7,43 @@ import (
 	gomock "github.com/rafrombrc/gomock/gomock"
 )
 
-// Mock of Firehose interface
-type MockFirehose struct {
+// Mock of RecordPutter interface
+type MockRecordPutter struct {
 	ctrl     *gomock.Controller
-	recorder *_MockFirehoseRecorder
+	recorder *_MockRecordPutterRecorder
 }
 
-// Recorder for MockFirehose (not exported)
-type _MockFirehoseRecorder struct {
-	mock *MockFirehose
+// Recorder for MockRecordPutter (not exported)
+type _MockRecordPutterRecorder struct {
+	mock *MockRecordPutter
 }
 
-func NewMockFirehose(ctrl *gomock.Controller) *MockFirehose {
-	mock := &MockFirehose{ctrl: ctrl}
-	mock.recorder = &_MockFirehoseRecorder{mock}
+func NewMockRecordPutter(ctrl *gomock.Controller) *MockRecordPutter {
+	mock := &MockRecordPutter{ctrl: ctrl}
+	mock.recorder = &_MockRecordPutterRecorder{mock}
 	return mock
 }
 
-func (_m *MockFirehose) EXPECT() *_MockFirehoseRecorder {
+func (_m *MockRecordPutter) EXPECT() *_MockRecordPutterRecorder {
 	return _m.recorder
 }
 
-func (_m *MockFirehose) Send(data []byte) error {
-	ret := _m.ctrl.Call(_m, "Send", data)
+func (_m *MockRecordPutter) PutRecord(record []byte) error {
+	ret := _m.ctrl.Call(_m, "PutRecord", record)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockFirehoseRecorder) Send(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "Send", arg0)
+func (_mr *_MockRecordPutterRecorder) PutRecord(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "PutRecord", arg0)
+}
+
+func (_m *MockRecordPutter) PutRecordBatch(records [][]byte) error {
+	ret := _m.ctrl.Call(_m, "PutRecordBatch", records)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockRecordPutterRecorder) PutRecordBatch(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "PutRecordBatch", arg0)
 }

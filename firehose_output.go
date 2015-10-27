@@ -9,7 +9,7 @@ import (
 )
 
 type FirehoseOutput struct {
-	client aws.Firehose
+	client aws.RecordPutter
 }
 
 type FirehoseOutputConfig struct {
@@ -41,7 +41,7 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 		}
 
 		// Send data to the firehose
-		err = f.client.Send([]byte(payload))
+		err = f.client.PutRecord([]byte(payload))
 		if err != nil {
 			or.LogError(err)
 			continue
