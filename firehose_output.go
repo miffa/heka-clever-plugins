@@ -32,8 +32,7 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 		payload := pack.Message.GetPayload()
 		pack.Recycle(nil)
 
-		// REVIEW - is this neccessary? if we can guarantee it's valid json,
-		// we can send the []byte directly to the firehose
+		// Verify input is valid json
 		object := make(map[string]interface{})
 		err := json.Unmarshal([]byte(payload), &object)
 		if err != nil {
@@ -41,12 +40,8 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 			continue
 		}
 
-		data, err := json.Marshal(object)
-		if err != nil {
-			or.LogError(err)
-			continue
-		}
-		err = f.client.Send([]byte(data))
+		// Send data to the firehose
+		err = f.client.Send([]byte(payload))
 		if err != nil {
 			or.LogError(err)
 			continue
