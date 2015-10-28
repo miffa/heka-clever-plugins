@@ -14,6 +14,9 @@ Testing
 
 5. Run `make test` to run all tests, or `ctest -R <test>` to run tests individually
 
+### A note on mocks
+Heka generates certain files in the pipeline package at compile-time. The `github.com/mozilla-services/heka/pipelinemock` package is generated at compile-time when following the above instructions. If you use vim-go or a similar plugin, it will not be able to locate the package.
+
 Plugins
 -------
 
@@ -80,8 +83,17 @@ db_max_open_connections = 1000
 flush_interval = 1000 # max time before doing an insert (in milliseconds)
 flush_count = 10000 # max number of messages to batch before inserting
 ```
+### Firehose Output
 
-### Keen Output
+Writes data to a [AWS Kinesis Firehose](https://aws.amazon.com/kinesis/firehose/). Currently only supports pre-configured streams created in the aws console.
 
-Sends event data to Keen.io.
+```
+[ExampleFirehoseOutput]
+type = "FirehoseOutput"
 
+# The stream to write to
+stream = "test_stream"
+
+# The region the stream is in (a good guess is 'us-west-2')
+region = 'us-west-2'
+```
