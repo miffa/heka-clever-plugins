@@ -46,7 +46,7 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 		}
 
 		if f.timestampColumn != "" {
-			// add timestamp to column named in timestampColumn
+			// add Heka message's timestamp to column named in timestampColumn
 			object[f.timestampColumn] = timestamp
 		}
 
