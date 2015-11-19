@@ -21,7 +21,11 @@ Heka generates certain files in the pipeline package at compile-time. The `githu
 Integration Testing
 -------
 
-After building out your plugins into a new `heka-private` image, you can test them in a local pipeline by using the [heka-testing](https://github.com/Clever/heka-testing) repo. With `heka-testing`, lua only plugins can be tested without even building out a new `heka-private` image.
+### Testing go plguins:
+After building your plugins into a new `heka-private` image (see the `UnitTesting` section above), you can test them in a local pipeline by using the [heka-testing](https://github.com/Clever/heka-testing) repo. 
+
+### Testing lua plugins:
+With [heka-testing](https://github.com/Clever/heka-testing)`, lua only plugins can be tested without even building out a new `heka-private` image. Just set the `HEKA_PLUGINS_SHA` to your latest commit. More details can be found in the `heka-testing` repo.
 
 
 Plugins
