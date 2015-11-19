@@ -25,7 +25,7 @@ Integration Testing
 After building your plugins into a new `heka-private` image (see the `UnitTesting` section above), you can test them in a local pipeline by using the [heka-testing](https://github.com/Clever/heka-testing) repo. 
 
 ### Testing lua plugins:
-With [heka-testing](https://github.com/Clever/heka-testing)`, lua only plugins can be tested without even building out a new `heka-private` image. Just set the `HEKA_PLUGINS_SHA` to your latest commit. More details can be found in the `heka-testing` repo.
+With [heka-testing](https://github.com/Clever/heka-testing), lua only plugins can be tested without even building out a new `heka-private` image. Just set the `HEKA_PLUGINS_SHA` to your latest commit. More details can be found in the `heka-testing` repo.
 
 
 Plugins
