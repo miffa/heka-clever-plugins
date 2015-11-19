@@ -1,7 +1,7 @@
 heka-clever-plugins
 ===================
 
-Testing
+UnitTesting
 -------
 
 1. Check out [heka](https://github.com/mozilla-services/heka/) (or, at Clever, [heka-private](https://github.com/Clever/heka-private))
@@ -16,6 +16,13 @@ Testing
 
 ### A note on mocks
 Heka generates certain files in the pipeline package at compile-time. The `github.com/mozilla-services/heka/pipelinemock` package is generated at compile-time when following the above instructions. If you use vim-go or a similar plugin, it will not be able to locate the package.
+
+
+Integration Testing
+-------
+
+After building out your plugins into a new `heka-private` image, you can test them in a local pipeline by using the [heka-testing](https://github.com/Clever/heka-testing) repo. With `heka-testing`, lua only plugins can be tested without even building out a new `heka-private` image.
+
 
 Plugins
 -------
