@@ -10,11 +10,17 @@ notify:
     on_started: true
     on_success: true
     room: Clever-Dev-CI
-    token: {{hipchatToken}}
+    token: $$hipchatToken
 script:
+  # postgres tests
   - createdb -h localhost -U postgres drone
   - psql -U postgres -h localhost -c "CREATE TABLE \"mock_table\" (s text, i int)" drone
   - cd postgres
   - go get ./...
   - go get github.com/stretchr/testify/assert
+  - go test
+
+  # cloudwatchlogs tests
+  - cd ../cloudwatchlogs
+  - go get ./...
   - go test
