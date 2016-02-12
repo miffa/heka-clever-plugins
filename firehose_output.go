@@ -3,6 +3,7 @@ package heka_clever_plugins
 import (
 	"encoding/json"
 	"time"
+	"errors"
 
 	"github.com/Clever/heka-clever-plugins/aws"
 
@@ -31,6 +32,18 @@ func (f *FirehoseOutput) Init(rawConfig interface{}) error {
 	return nil
 }
 
+func (f *FirehoseOutput) useEncoder(or pipeline.OutputRunner, pack *pipeline.PipelinePack, object *map[string]interface{}) error {
+	if or.Encoder() == nil {
+		return errors.New("tried to use encoder, but not configured")
+	}
+	outBytes, err := or.Encode(pack)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(outBytes, &object)
+}
+
 func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) error {
 	for pack := range or.InChan() {
 		payload := pack.Message.GetPayload()
@@ -41,7 +54,16 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 		object := make(map[string]interface{})
 		err := json.Unmarshal([]byte(payload), &object)
 		if err != nil {
-			or.LogError(err)
+			// attempt to use Encoder if it exists
+			if encode_err := f.useEncoder(or, pack, &object); encode_err != nil {
+				or.LogError(err)
+				or.LogError(encode_err)
+				continue
+			}
+		}
+
+		if len(object) == 0 {
+			or.LogError(errors.New("No fields found in message"))
 			continue
 		}
 
@@ -63,6 +85,7 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 			continue
 		}
 	}
+
 	return nil
 }
 
