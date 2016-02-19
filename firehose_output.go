@@ -39,7 +39,7 @@ func (f *FirehoseOutput) parseFields(pack *pipeline.PipelinePack) map[string]int
 
 	// Handle standard heka fields
 	object["uuid"] = m.GetUuidString()
-	object["timestamp"] = m.GetTimestamp()
+	object["timestamp"] = time.Unix(0, m.GetTimestamp()).Format("2006-01-02 15:04:05.000")
 	object["type"] = m.GetType()
 	object["logger"] = m.GetLogger()
 	object["severity"] = m.GetSeverity()
@@ -62,7 +62,6 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 	for pack := range or.InChan() {
 		payload := pack.Message.GetPayload()
 		timestamp := time.Unix(0, pack.Message.GetTimestamp()).Format("2006-01-02 15:04:05.000")
-		pack.Recycle(nil)
 
 		// Verify input is valid json
 		object := make(map[string]interface{})
@@ -72,6 +71,9 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 			// into a map of fields and dynamic fields
 			object = f.parseFields(pack)
 		}
+
+		// Only recycle the pack after all data has been pulled from it
+		pack.Recycle(nil)
 
 		if len(object) == 0 {
 			or.LogError(errors.New("No fields found in message"))
