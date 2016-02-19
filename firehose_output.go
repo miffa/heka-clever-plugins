@@ -2,11 +2,12 @@ package heka_clever_plugins
 
 import (
 	"encoding/json"
-	"time"
 	"errors"
+	"time"
 
 	"github.com/Clever/heka-clever-plugins/aws"
 
+	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
 )
 
@@ -32,16 +33,29 @@ func (f *FirehoseOutput) Init(rawConfig interface{}) error {
 	return nil
 }
 
-func (f *FirehoseOutput) useEncoder(or pipeline.OutputRunner, pack *pipeline.PipelinePack, object *map[string]interface{}) error {
-	if or.Encoder() == nil {
-		return errors.New("tried to use encoder, but not configured")
-	}
-	outBytes, err := or.Encode(pack)
-	if err != nil {
-		return err
-	}
+func (f *FirehoseOutput) parseFields(pack *pipeline.PipelinePack) map[string]interface{} {
+	m := pack.Message
+	object := make(map[string]interface{})
 
-	return json.Unmarshal(outBytes, &object)
+	// Handle standard heka fields
+	object["uuid"] = m.GetUuidString()
+	object["timestamp"] = m.GetTimestamp()
+	object["type"] = m.GetType()
+	object["logger"] = m.GetLogger()
+	object["severity"] = m.GetSeverity()
+	object["payload"] = m.GetPayload()
+	object["envversion"] = m.GetEnvVersion()
+	object["pid"] = m.GetPid()
+	object["hostname"] = m.GetHostname()
+
+	// store each dynamic field as a top level entry
+	for _, field := range m.Fields {
+		// ignore byte fields and empty fields
+		if field.Name != nil && field.GetValueType() != message.Field_BYTES {
+			object[*field.Name] = field.GetValue()
+		}
+	}
+	return object
 }
 
 func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) error {
@@ -54,12 +68,9 @@ func (f *FirehoseOutput) Run(or pipeline.OutputRunner, h pipeline.PluginHelper) 
 		object := make(map[string]interface{})
 		err := json.Unmarshal([]byte(payload), &object)
 		if err != nil {
-			// attempt to use Encoder if it exists
-			if encode_err := f.useEncoder(or, pack, &object); encode_err != nil {
-				or.LogError(err)
-				or.LogError(encode_err)
-				continue
-			}
+			// Since payload is not a json object, parse the entire pack
+			// into a map of fields and dynamic fields
+			object = f.parseFields(pack)
 		}
 
 		if len(object) == 0 {
