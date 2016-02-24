@@ -3,17 +3,17 @@ package heka_clever_plugins
 import (
 	"runtime"
 	"testing"
-	"time"
 
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
 	"github.com/mozilla-services/heka/pipelinemock"
+	"github.com/mozilla-services/heka/plugins"
 	"github.com/rafrombrc/gomock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
-// TestJSONMessage tests that Messages with JSON Payloads get sent
-func TestJSONMessage(t *testing.T) {
+// TestEncoder tests that messages get encoded
+func TestEncoder(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -31,9 +31,14 @@ func TestJSONMessage(t *testing.T) {
 	// override the client with a mock
 	firehoseOutput.client = mockClient
 
-	// create a real stop channel
+	// create a real stop channel and encoder
 	mockChan := make(chan bool)
 	mockOR.EXPECT().StopChan().Return(mockChan)
+
+	encoder := new(plugins.PayloadEncoder)
+	encConfig := new(plugins.PayloadEncoderConfig)
+	encoder.Init(encConfig)
+	mockOR.EXPECT().Encoder().Return(encoder)
 	err = firehoseOutput.Prepare(mockOR, mockPH)
 	assert.NoError(t, err, "did not expect error from Prepare()")
 
@@ -49,6 +54,7 @@ func TestJSONMessage(t *testing.T) {
 		[]byte(input),
 	}
 
+	mockOR.EXPECT().Encode(gomock.Any()).Return([]byte(input), nil)
 	mockClient.EXPECT().PutRecordBatch(expected).Return(nil)
 	mockOR.EXPECT().UpdateCursor("queuecursor")
 	err = firehoseOutput.ProcessMessage(&testPack)
@@ -58,8 +64,7 @@ func TestJSONMessage(t *testing.T) {
 	firehoseOutput.CleanUp()
 }
 
-// TestEmptyMessage tests that an error is generated when there is an empty
-// JSON message
+// TestEmptyMessage tests that an error is generated when the message is empty
 func TestEmptyMessage(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -77,7 +82,7 @@ func TestEmptyMessage(t *testing.T) {
 	}
 
 	// Send test input through the channel
-	input := `{}`
+	input := ``
 	testPack := pipeline.PipelinePack{
 		Message: &message.Message{
 			Payload: &input,
@@ -85,58 +90,13 @@ func TestEmptyMessage(t *testing.T) {
 		QueueCursor: "queuecursor",
 	}
 
+	mockOR.EXPECT().Encode(gomock.Any()).Return(nil, nil)
 	err := firehoseOutput.ProcessMessage(&testPack)
 	assert.Error(t, err, "did not return err for empty json object")
-}
 
-// TestMessageWithTimestamp tests that if a TimestampColumn is provided in the config
-// then the Heka message's timestamp gets added to the message with that column name.
-func TestMessageWithTimestamp(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-
-	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
-	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
-	mockClient := NewMockRecordPutter(mockCtrl)
-	conf := FirehoseOutputConfig{
-		TimestampColumn: "created",
-		FlushCount:      1,
-		FlushInterval:   0,
-	}
-
-	firehoseOutput := new(FirehoseOutput)
-	err := firehoseOutput.Init(&conf)
-	assert.NoError(t, err, "did not expect error from Init()")
-	// override the client with a mock
-	firehoseOutput.client = mockClient
-
-	// create a real stop channel
-	mockChan := make(chan bool)
-	mockOR.EXPECT().StopChan().Return(mockChan)
-	err = firehoseOutput.Prepare(mockOR, mockPH)
-	assert.NoError(t, err, "did not expect error from Prepare()")
-
-	// Send test input through the channel
-	input := `{"key":"value"}`
-	timestamp := time.Date(2015, 07, 1, 13, 14, 15, 0, time.UTC).UnixNano()
-	testPack := pipeline.PipelinePack{
-		Message: &message.Message{
-			Payload:   &input,
-			Timestamp: &timestamp,
-		},
-		QueueCursor: "queuecursor",
-	}
-
-	expected := [][]byte{
-		[]byte(`{"created":"2015-07-01 13:14:15.000","key":"value"}`),
-	}
-	mockClient.EXPECT().PutRecordBatch(expected).Return(nil)
-	mockOR.EXPECT().UpdateCursor("queuecursor")
+	mockOR.EXPECT().Encode(gomock.Any()).Return([]byte(""), nil)
 	err = firehoseOutput.ProcessMessage(&testPack)
-	assert.NoError(t, err, "did not expect err for valid message")
-
-	runtime.Gosched()
-	firehoseOutput.CleanUp()
+	assert.Error(t, err, "did not return err for empty json object")
 }
 
 // TestBatchLimit tests that an error is generated a batch limit that is too
@@ -174,9 +134,15 @@ func TestMessageBatching(t *testing.T) {
 	// override the client with a mock
 	firehoseOutput.client = mockClient
 
-	// create a real stop channel
+	// create a real stop channel & encoder
 	mockChan := make(chan bool)
 	mockOR.EXPECT().StopChan().Return(mockChan)
+
+	encoder := new(plugins.PayloadEncoder)
+	encConfig := new(plugins.PayloadEncoderConfig)
+	encoder.Init(encConfig)
+	mockOR.EXPECT().Encoder().Return(encoder)
+
 	err = firehoseOutput.Prepare(mockOR, mockPH)
 	assert.NoError(t, err, "did not expect error from Prepare()")
 
@@ -211,14 +177,17 @@ func TestMessageBatching(t *testing.T) {
 		[]byte(`{"key":"value3"}`),
 	}
 
+	mockOR.EXPECT().Encode(gomock.Any()).Return([]byte(input1), nil)
 	err = firehoseOutput.ProcessMessage(&testPack1)
 	assert.NoError(t, err, "did not expect err for valid message (1)")
 	runtime.Gosched()
 
+	mockOR.EXPECT().Encode(gomock.Any()).Return([]byte(input2), nil)
 	err = firehoseOutput.ProcessMessage(&testPack2)
 	assert.NoError(t, err, "did not expect err for valid message (2)")
 	runtime.Gosched()
 
+	mockOR.EXPECT().Encode(gomock.Any()).Return([]byte(input3), nil)
 	mockClient.EXPECT().PutRecordBatch(expected).Return(nil)
 	mockOR.EXPECT().UpdateCursor("queuecursor3")
 	err = firehoseOutput.ProcessMessage(&testPack3)

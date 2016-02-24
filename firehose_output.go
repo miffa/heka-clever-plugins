@@ -1,7 +1,6 @@
 package heka_clever_plugins
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -39,20 +38,22 @@ type FirehoseOutputConfig struct {
 	Stream string `toml:"stream"`
 	// AWS region the stream lives in
 	Region string `toml:"region"`
-	// Optional column to use as the message timestamp
-	TimestampColumn string `toml:"timestamp_column"`
 	// Interval at which accumulated messages should be bulk put to
 	// firehose, in milliseconds (default 1000, i.e. 1 second).
 	FlushInterval uint32 `toml:"flush_interval"`
 	// Number of messages that triggers a put to firehose
 	// (default to 1, maximum is 500)
 	FlushCount int `toml:"flush_count"`
+	// Which encoder to use for converting the heka message into binary
+	// (defaults to `PayloadEncoder`)
+	Encoder string
 }
 
 func (f *FirehoseOutput) ConfigStruct() interface{} {
 	return &FirehoseOutputConfig{
 		FlushInterval: 1000,
 		FlushCount:    1,
+		Encoder:       "PayloadEncoder",
 	}
 }
 
@@ -71,6 +72,10 @@ func (f *FirehoseOutput) Init(config interface{}) error {
 }
 
 func (f *FirehoseOutput) Prepare(or pipeline.OutputRunner, h pipeline.PluginHelper) error {
+	if or.Encoder() == nil {
+		return errors.New("Encoder required.")
+	}
+
 	f.or = or
 	f.stopChan = or.StopChan()
 
@@ -92,63 +97,19 @@ func (f *FirehoseOutput) Prepare(or pipeline.OutputRunner, h pipeline.PluginHelp
 	return nil
 }
 
-func (f *FirehoseOutput) parseFields(pack *pipeline.PipelinePack) map[string]interface{} {
-	m := pack.Message
-	object := make(map[string]interface{})
-
-	// Handle standard heka fields
-	object["uuid"] = m.GetUuidString()
-	object["timestamp"] = time.Unix(0, m.GetTimestamp()).Format("2006-01-02 15:04:05.000")
-	object["type"] = m.GetType()
-	object["logger"] = m.GetLogger()
-	object["severity"] = m.GetSeverity()
-	object["payload"] = m.GetPayload()
-	object["envversion"] = m.GetEnvVersion()
-	object["pid"] = m.GetPid()
-	object["hostname"] = m.GetHostname()
-
-	// store each dynamic field as a top level entry
-	for _, field := range m.Fields {
-		// ignore byte fields and empty fields
-		if field.Name != nil && field.GetValueType() != message.Field_BYTES {
-			object[*field.Name] = field.GetValue()
-		}
-	}
-	return object
-}
-
 func (f *FirehoseOutput) ProcessMessage(pack *pipeline.PipelinePack) error {
 	atomic.AddInt64(&f.recvRecordCount, 1)
-	payload := pack.Message.GetPayload()
-	timestamp := time.Unix(0, pack.Message.GetTimestamp()).Format("2006-01-02 15:04:05.000")
 
-	// Verify input is valid json
-	object := make(map[string]interface{})
-	err := json.Unmarshal([]byte(payload), &object)
+	outBytes, err := f.or.Encode(pack)
 	if err != nil {
-		// Since payload is not a json object, parse the entire pack
-		// into a map of fields and dynamic fields
-		object = f.parseFields(pack)
+		return fmt.Errorf("can't encode: %s", err)
 	}
-
-	if len(object) == 0 {
-		atomic.AddInt64(&f.droppedRecordCount, 1)
-		return errors.New("No fields found in message")
-	}
-
-	if f.conf.TimestampColumn != "" {
-		// add Heka message's timestamp to column named in timestampColumn
-		object[f.conf.TimestampColumn] = timestamp
-	}
-
-	record, err := json.Marshal(object)
-	if err != nil {
-		atomic.AddInt64(&f.droppedRecordCount, 1)
-		return err
+	if outBytes == nil || len(outBytes) == 0 {
+		return errors.New("Encoded message is empty")
 	}
 
 	// Send data to the batcher
-	f.batchChan <- MsgPack{record: record, queueCursor: pack.QueueCursor}
+	f.batchChan <- MsgPack{record: outBytes, queueCursor: pack.QueueCursor}
 	return nil
 }
 
