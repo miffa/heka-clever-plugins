@@ -45,7 +45,7 @@ type FirehoseOutputConfig struct {
 	// firehose, in milliseconds (default 1000, i.e. 1 second).
 	FlushInterval uint32 `toml:"flush_interval"`
 	// Number of messages that triggers a put to firehose
-	// (default to 1)
+	// (default to 1, maximum is 500)
 	FlushCount int `toml:"flush_count"`
 }
 
@@ -58,6 +58,10 @@ func (f *FirehoseOutput) ConfigStruct() interface{} {
 
 func (f *FirehoseOutput) Init(config interface{}) error {
 	f.conf = config.(*FirehoseOutputConfig)
+
+	if f.conf.FlushCount > 500 {
+		return fmt.Errorf("FlushCount cannot exceed 500 messages")
+	}
 
 	f.batchChan = make(chan MsgPack, 100)
 	f.batchedRecords = make([][]byte, 0, f.conf.FlushCount)
@@ -77,6 +81,11 @@ func (f *FirehoseOutput) Prepare(or pipeline.OutputRunner, h pipeline.PluginHelp
 			return fmt.Errorf("can't create flush ticker: %s", err.Error())
 		}
 		f.flushTicker = time.NewTicker(d)
+	} else {
+		// Create an empty Ticker so that the ticker channel can still be
+		// checked
+		ticker := time.Ticker{}
+		f.flushTicker = &ticker
 	}
 
 	go f.batchSender()
@@ -138,21 +147,8 @@ func (f *FirehoseOutput) ProcessMessage(pack *pipeline.PipelinePack) error {
 		return err
 	}
 
-	// Send data to the firehose
-	if f.conf.FlushCount == 1 {
-		err = f.client.PutRecord(record)
-		if err != nil {
-			atomic.AddInt64(&f.droppedRecordCount, 1)
-			return err
-		} else {
-			f.or.UpdateCursor(pack.QueueCursor)
-			atomic.AddInt64(&f.sentRecordCount, 1)
-		}
-	} else {
-		// Batch the data
-		f.batchChan <- MsgPack{record: record, queueCursor: pack.QueueCursor}
-	}
-
+	// Send data to the batcher
+	f.batchChan <- MsgPack{record: record, queueCursor: pack.QueueCursor}
 	return nil
 }
 

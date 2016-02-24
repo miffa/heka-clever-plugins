@@ -18,16 +18,24 @@ func TestJSONMessage(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
-	mockFirehose := NewMockRecordPutter(mockCtrl)
+	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
+	mockClient := NewMockRecordPutter(mockCtrl)
 	conf := FirehoseOutputConfig{
 		FlushCount:    1,
 		FlushInterval: 0,
 	}
-	firehoseOutput := FirehoseOutput{
-		client: mockFirehose,
-		conf:   &conf,
-		or:     mockOR,
-	}
+
+	firehoseOutput := new(FirehoseOutput)
+	err := firehoseOutput.Init(&conf)
+	assert.NoError(t, err, "did not expect error from Init()")
+	// override the client with a mock
+	firehoseOutput.client = mockClient
+
+	// create a real stop channel
+	mockChan := make(chan bool)
+	mockOR.EXPECT().StopChan().Return(mockChan)
+	err = firehoseOutput.Prepare(mockOR, mockPH)
+	assert.NoError(t, err, "did not expect error from Prepare()")
 
 	// Send test input through the channel
 	input := `{"key":"value"}`
@@ -37,11 +45,17 @@ func TestJSONMessage(t *testing.T) {
 		},
 		QueueCursor: "queuecursor",
 	}
+	expected := [][]byte{
+		[]byte(input),
+	}
 
-	mockFirehose.EXPECT().PutRecord([]byte(input)).Return(nil)
+	mockClient.EXPECT().PutRecordBatch(expected).Return(nil)
 	mockOR.EXPECT().UpdateCursor("queuecursor")
-	err := firehoseOutput.ProcessMessage(&testPack)
+	err = firehoseOutput.ProcessMessage(&testPack)
 	assert.NoError(t, err, "did not expect err for valid message")
+
+	runtime.Gosched()
+	firehoseOutput.CleanUp()
 }
 
 // TestEmptyMessage tests that an error is generated when there is an empty
@@ -82,17 +96,25 @@ func TestMessageWithTimestamp(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
-	mockFirehose := NewMockRecordPutter(mockCtrl)
+	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
+	mockClient := NewMockRecordPutter(mockCtrl)
 	conf := FirehoseOutputConfig{
 		TimestampColumn: "created",
 		FlushCount:      1,
 		FlushInterval:   0,
 	}
-	firehoseOutput := FirehoseOutput{
-		client: mockFirehose,
-		conf:   &conf,
-		or:     mockOR,
-	}
+
+	firehoseOutput := new(FirehoseOutput)
+	err := firehoseOutput.Init(&conf)
+	assert.NoError(t, err, "did not expect error from Init()")
+	// override the client with a mock
+	firehoseOutput.client = mockClient
+
+	// create a real stop channel
+	mockChan := make(chan bool)
+	mockOR.EXPECT().StopChan().Return(mockChan)
+	err = firehoseOutput.Prepare(mockOR, mockPH)
+	assert.NoError(t, err, "did not expect error from Prepare()")
 
 	// Send test input through the channel
 	input := `{"key":"value"}`
@@ -105,11 +127,32 @@ func TestMessageWithTimestamp(t *testing.T) {
 		QueueCursor: "queuecursor",
 	}
 
-	expected := `{"created":"2015-07-01 13:14:15.000","key":"value"}`
-	mockFirehose.EXPECT().PutRecord([]byte(expected)).Return(nil)
+	expected := [][]byte{
+		[]byte(`{"created":"2015-07-01 13:14:15.000","key":"value"}`),
+	}
+	mockClient.EXPECT().PutRecordBatch(expected).Return(nil)
 	mockOR.EXPECT().UpdateCursor("queuecursor")
-	err := firehoseOutput.ProcessMessage(&testPack)
+	err = firehoseOutput.ProcessMessage(&testPack)
 	assert.NoError(t, err, "did not expect err for valid message")
+
+	runtime.Gosched()
+	firehoseOutput.CleanUp()
+}
+
+// TestBatchLimit tests that an error is generated a batch limit that is too
+// large is given
+func TestBatchLimit(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	conf := FirehoseOutputConfig{
+		FlushCount:    501,
+		FlushInterval: 0,
+	}
+
+	firehoseOutput := new(FirehoseOutput)
+	err := firehoseOutput.Init(&conf)
+	assert.Error(t, err, "expected an error from Init() because FloushCount > 500")
 }
 
 // TestMessageBatching makes sure that messages are batched appropriately
@@ -122,7 +165,7 @@ func TestMessageBatching(t *testing.T) {
 	mockClient := NewMockRecordPutter(mockCtrl)
 	conf := FirehoseOutputConfig{
 		FlushCount:    3,
-		FlushInterval: 1000,
+		FlushInterval: 0,
 	}
 
 	firehoseOutput := new(FirehoseOutput)
@@ -180,9 +223,9 @@ func TestMessageBatching(t *testing.T) {
 	mockOR.EXPECT().UpdateCursor("queuecursor3")
 	err = firehoseOutput.ProcessMessage(&testPack3)
 	assert.NoError(t, err, "did not expect err for valid message (3)")
-	runtime.Gosched()
 
 	// Make sure everything got sent and cleanup
+	runtime.Gosched()
 	assert.Equal(t, 0, len(firehoseOutput.batchedRecords), "pending records should be empty")
 	assert.Equal(t, 3, firehoseOutput.sentRecordCount, "3 messages should have been sent")
 	assert.Equal(t, 3, firehoseOutput.recvRecordCount, "3 messages should have been recv")
