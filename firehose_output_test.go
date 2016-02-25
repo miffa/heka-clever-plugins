@@ -1,9 +1,9 @@
 package heka_clever_plugins
 
 import (
+	"runtime"
 	"testing"
 	"time"
-	"errors"
 
 	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
@@ -12,116 +12,223 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRun(t *testing.T) {
+// TestJSONMessage tests that Messages with JSON Payloads get sent
+func TestJSONMessage(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
 	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
-	mockFirehose := NewMockRecordPutter(mockCtrl)
-
-	firehoseOutput := FirehoseOutput{
-		client: mockFirehose,
+	mockClient := NewMockRecordPutter(mockCtrl)
+	conf := FirehoseOutputConfig{
+		FlushCount:    1,
+		FlushInterval: 0,
 	}
 
-	testChan := make(chan *pipeline.PipelinePack)
-	mockOR.EXPECT().InChan().Return(testChan)
+	firehoseOutput := new(FirehoseOutput)
+	err := firehoseOutput.Init(&conf)
+	assert.NoError(t, err, "did not expect error from Init()")
+	// override the client with a mock
+	firehoseOutput.client = mockClient
+
+	// create a real stop channel
+	mockChan := make(chan bool)
+	mockOR.EXPECT().StopChan().Return(mockChan)
+	err = firehoseOutput.Prepare(mockOR, mockPH)
+	assert.NoError(t, err, "did not expect error from Prepare()")
 
 	// Send test input through the channel
 	input := `{"key":"value"}`
-	go func() {
-		testPack := pipeline.PipelinePack{
-			Message: &message.Message{
-				Payload: &input,
-			},
-		}
+	testPack := pipeline.PipelinePack{
+		Message: &message.Message{
+			Payload: &input,
+		},
+		QueueCursor: "queuecursor",
+	}
+	expected := [][]byte{
+		[]byte(input),
+	}
 
-		testChan <- &testPack
-		close(testChan)
-	}()
+	mockClient.EXPECT().PutRecordBatch(expected).Return(nil)
+	mockOR.EXPECT().UpdateCursor("queuecursor")
+	err = firehoseOutput.ProcessMessage(&testPack)
+	assert.NoError(t, err, "did not expect err for valid message")
 
-	mockFirehose.EXPECT().PutRecord([]byte(input)).Return(nil)
-
-	err := firehoseOutput.Run(mockOR, mockPH)
-	assert.NoError(t, err, "did not expect err for valid Run()")
+	runtime.Gosched()
+	firehoseOutput.CleanUp()
 }
 
-// TestRunWithTimestamp tests that if a TimestampColumn is provided in the config
-// then the Heka message's timestamp gets added to the message with that column name.
-func TestRunWithTimestamp(t *testing.T) {
+// TestEmptyMessage tests that an error is generated when there is an empty
+// JSON message
+func TestEmptyMessage(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
-	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
 	mockFirehose := NewMockRecordPutter(mockCtrl)
-
-	firehoseOutput := FirehoseOutput{
-		client:          mockFirehose,
-		timestampColumn: "created",
+	conf := FirehoseOutputConfig{
+		FlushCount:    1,
+		FlushInterval: 0,
 	}
-
-	testChan := make(chan *pipeline.PipelinePack)
-	mockOR.EXPECT().InChan().Return(testChan)
-
-	// Send test input through the channel
-	input := `{"key": "value"}`
-	timestamp := time.Date(2015, 07, 1, 13, 14, 15, 0, time.UTC).UnixNano()
-	go func() {
-		testPack := pipeline.PipelinePack{
-			Message: &message.Message{
-				Payload:   &input,
-				Timestamp: &timestamp,
-			},
-		}
-
-		testChan <- &testPack
-		close(testChan)
-	}()
-
-	expected := `{"created":"2015-07-01 13:14:15.000","key":"value"}`
-	mockFirehose.EXPECT().PutRecord([]byte(expected)).Return(nil)
-
-	err := firehoseOutput.Run(mockOR, mockPH)
-	assert.NoError(t, err, "did not expect err for valid Run()")
-}
-
-// TestRunWithoutData tests that if an empty row is passed to the plugin
-// then the plugin returns an error but continues
-func TestRunWithoutData(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-
-	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
-	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
-	mockFirehose := NewMockRecordPutter(mockCtrl)
-
 	firehoseOutput := FirehoseOutput{
-		client:          mockFirehose,
-		timestampColumn: "created",
+		client: mockFirehose,
+		conf:   &conf,
+		or:     mockOR,
 	}
-
-	testChan := make(chan *pipeline.PipelinePack)
-	mockOR.EXPECT().InChan().Return(testChan)
 
 	// Send test input through the channel
 	input := `{}`
+	testPack := pipeline.PipelinePack{
+		Message: &message.Message{
+			Payload: &input,
+		},
+		QueueCursor: "queuecursor",
+	}
+
+	err := firehoseOutput.ProcessMessage(&testPack)
+	assert.Error(t, err, "did not return err for empty json object")
+}
+
+// TestMessageWithTimestamp tests that if a TimestampColumn is provided in the config
+// then the Heka message's timestamp gets added to the message with that column name.
+func TestMessageWithTimestamp(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
+	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
+	mockClient := NewMockRecordPutter(mockCtrl)
+	conf := FirehoseOutputConfig{
+		TimestampColumn: "created",
+		FlushCount:      1,
+		FlushInterval:   0,
+	}
+
+	firehoseOutput := new(FirehoseOutput)
+	err := firehoseOutput.Init(&conf)
+	assert.NoError(t, err, "did not expect error from Init()")
+	// override the client with a mock
+	firehoseOutput.client = mockClient
+
+	// create a real stop channel
+	mockChan := make(chan bool)
+	mockOR.EXPECT().StopChan().Return(mockChan)
+	err = firehoseOutput.Prepare(mockOR, mockPH)
+	assert.NoError(t, err, "did not expect error from Prepare()")
+
+	// Send test input through the channel
+	input := `{"key":"value"}`
 	timestamp := time.Date(2015, 07, 1, 13, 14, 15, 0, time.UTC).UnixNano()
-	go func() {
-		testPack := pipeline.PipelinePack{
-			Message: &message.Message{
-				Payload:   &input,
-				Timestamp: &timestamp,
-			},
-		}
+	testPack := pipeline.PipelinePack{
+		Message: &message.Message{
+			Payload:   &input,
+			Timestamp: &timestamp,
+		},
+		QueueCursor: "queuecursor",
+	}
 
-		testChan <- &testPack
-		close(testChan)
-	}()
+	expected := [][]byte{
+		[]byte(`{"created":"2015-07-01 13:14:15.000","key":"value"}`),
+	}
+	mockClient.EXPECT().PutRecordBatch(expected).Return(nil)
+	mockOR.EXPECT().UpdateCursor("queuecursor")
+	err = firehoseOutput.ProcessMessage(&testPack)
+	assert.NoError(t, err, "did not expect err for valid message")
 
-	expected_error := errors.New("No fields found in message")
-	mockOR.EXPECT().LogError(expected_error).Return()
+	runtime.Gosched()
+	firehoseOutput.CleanUp()
+}
 
-	err := firehoseOutput.Run(mockOR, mockPH)
-	assert.NoError(t, err, "don't fail Run() for no fields found")
+// TestBatchLimit tests that an error is generated a batch limit that is too
+// large is given
+func TestBatchLimit(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	conf := FirehoseOutputConfig{
+		FlushCount:    501,
+		FlushInterval: 0,
+	}
+
+	firehoseOutput := new(FirehoseOutput)
+	err := firehoseOutput.Init(&conf)
+	assert.Error(t, err, "expected an error from Init() because FloushCount > 500")
+}
+
+// TestMessageBatching makes sure that messages are batched appropriately
+func TestMessageBatching(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockOR := pipelinemock.NewMockOutputRunner(mockCtrl)
+	mockPH := pipelinemock.NewMockPluginHelper(mockCtrl)
+	mockClient := NewMockRecordPutter(mockCtrl)
+	conf := FirehoseOutputConfig{
+		FlushCount:    3,
+		FlushInterval: 0,
+	}
+
+	firehoseOutput := new(FirehoseOutput)
+	err := firehoseOutput.Init(&conf)
+	assert.NoError(t, err, "did not expect error from Init()")
+	// override the client with a mock
+	firehoseOutput.client = mockClient
+
+	// create a real stop channel
+	mockChan := make(chan bool)
+	mockOR.EXPECT().StopChan().Return(mockChan)
+	err = firehoseOutput.Prepare(mockOR, mockPH)
+	assert.NoError(t, err, "did not expect error from Prepare()")
+
+	// Send 3 messages to trigger the flush
+	input1 := `{"key":"value1"}`
+	testPack1 := pipeline.PipelinePack{
+		Message: &message.Message{
+			Payload: &input1,
+		},
+		QueueCursor: "queuecursor1",
+	}
+
+	input2 := `{"key":"value2"}`
+	testPack2 := pipeline.PipelinePack{
+		Message: &message.Message{
+			Payload: &input2,
+		},
+		QueueCursor: "queuecursor2",
+	}
+
+	input3 := `{"key":"value3"}`
+	testPack3 := pipeline.PipelinePack{
+		Message: &message.Message{
+			Payload: &input3,
+		},
+		QueueCursor: "queuecursor3",
+	}
+
+	expected := [][]byte{
+		[]byte(`{"key":"value1"}`),
+		[]byte(`{"key":"value2"}`),
+		[]byte(`{"key":"value3"}`),
+	}
+
+	err = firehoseOutput.ProcessMessage(&testPack1)
+	assert.NoError(t, err, "did not expect err for valid message (1)")
+	runtime.Gosched()
+
+	err = firehoseOutput.ProcessMessage(&testPack2)
+	assert.NoError(t, err, "did not expect err for valid message (2)")
+	runtime.Gosched()
+
+	mockClient.EXPECT().PutRecordBatch(expected).Return(nil)
+	mockOR.EXPECT().UpdateCursor("queuecursor3")
+	err = firehoseOutput.ProcessMessage(&testPack3)
+	assert.NoError(t, err, "did not expect err for valid message (3)")
+
+	// Make sure everything got sent and cleanup
+	runtime.Gosched()
+	assert.Equal(t, 0, len(firehoseOutput.batchedRecords), "pending records should be empty")
+	assert.Equal(t, 3, firehoseOutput.sentRecordCount, "3 messages should have been sent")
+	assert.Equal(t, 3, firehoseOutput.recvRecordCount, "3 messages should have been recv")
+	assert.Equal(t, 0, firehoseOutput.droppedRecordCount, "0 messages should have been dropped")
+	firehoseOutput.CleanUp()
 }
