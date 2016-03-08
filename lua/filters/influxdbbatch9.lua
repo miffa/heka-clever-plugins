@@ -370,16 +370,13 @@ local function points_tags_tables(config)
     -- defined.
     local tags = {}
     local testoutput = ""
-    if not config.carbon_format
-        and (config.tag_fields_all
+    if (config.tag_fields_all
         or config.tag_fields_all_base
         or config.used_tag_fields) then
             for field in pairs(used_fields(base_fields_tag_list, config.skip_fields)) do
                 if config.tag_fields_all or config.tag_fields_all_base or used_tag_fields[field] then
-                    if not skip_fields[field] then
-                        local value = read_message(field)
-                        table.insert(tags, influxdb_kv_fmt(field).."="..tostring(influxdb_kv_fmt(value)))
-                    end
+                    local value = read_message(field)
+                    table.insert(tags, influxdb_kv_fmt(field).."="..tostring(influxdb_kv_fmt(value)))
                 end
             end
     end
@@ -408,7 +405,7 @@ local function points_tags_tables(config)
             -- Include the dynamic fields as tags if they are defined in
             -- configuration or the magic value "**all**" is defined.
             -- Convert value to a string as this is required by the API
-            if not config["carbon_format"] and not skip_fields[field]
+            if not config["carbon_format"]
                 and (config["tag_fields_all"]
                 or (config["used_tag_fields"] and used_tag_fields[field])) then
                     table.insert(tags, influxdb_kv_fmt(field).."="..tostring(influxdb_kv_fmt(value)))
