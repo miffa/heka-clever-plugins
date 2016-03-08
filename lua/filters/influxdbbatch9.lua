@@ -347,6 +347,10 @@ end
 ------------------------
 
 -- Modified to handle extra config and change handling of tag fields
+-- @mo * removing references to Carbon handling to simplify reasoning
+--     * following the line protocol spec at 
+--           https://docs.influxdata.com/influxdb/v0.10/write_protocols/line/
+--     * adding support for multiple fields in the same line
 local function points_tags_tables(config)
     local name_prefix = config.name_prefix or ""
     if config.interp_name_prefix then
@@ -401,12 +405,6 @@ local function points_tags_tables(config)
                 value = field_value
             end
 
-            -- Replace non-word characters with underscores for Carbon
-            -- to avoid periods resulting in extraneous directories
-            if config["carbon_format"] then
-                field = field:gsub("[^%w]", "_")
-            end
-
             -- Include the dynamic fields as tags if they are defined in
             -- configuration or the magic value "**all**" is defined.
             -- Convert value to a string as this is required by the API
@@ -424,14 +422,16 @@ local function points_tags_tables(config)
                 else
                     points[key_name] = value
                 end
-            elseif config["source_value_field"] and field == config["source_value_field"] then
-                points[name_prefix] = value
-            -- Only add fields that are not requested to be skipped
+            elseif config["source_value_field"] then 
+                if field == config["source_value_field"] then
+                    points[name_prefix] = value
+                end
+                -- Only add fields that are not requested to be skipped
             elseif not config["skip_fields_str"]
                 or (config["skip_fields"] and not skip_fields[field]) then
                     -- Set the name attribute of this table by concatenating name_prefix
                     -- with the name of this particular field
-                    points[name_prefix..name_prefix_delimiter..field] = value
+                    points[field] = value
             end
         end
     else
@@ -441,27 +441,15 @@ local function points_tags_tables(config)
     return points, tags
 end
 
-function carbon_line_msg(config)
-    local api_message = {}
-    local message_timestamp = message_timestamp(config.timestamp_precision)
-    local points = points_tags_tables(config)
-
-    for name, value in pairs(points) do
-        value = tostring(value)
-        -- Only add metrics that are originally integers or floats, as that is
-        -- what Carbon is limited to storing.
-        if string.match(value, "^[%d.]+$") then
-            table.insert(api_message, name.." "..value.." "..message_timestamp)
-        end
-    end
-
-    return api_message
-end
-
 function influxdb_line_msg(config)
-    local api_message = {}
+    local name_prefix = config.name_prefix or ""
+    if config.interp_name_prefix then
+        name_prefix = interpolate_from_msg(name_prefix)
+    end
+    local api_message = ""
     local message_timestamp = message_timestamp(config.timestamp_precision)
     local points, tags = points_tags_tables(config)
+    local fields = {}
 
     -- Build a table of data points that we will eventually convert
     -- to a newline delimited list of InfluxDB write API line protocol
@@ -481,18 +469,20 @@ function influxdb_line_msg(config)
         if type(value) == "number" or string.match(value, "^[%d.]+$") then
             value = string.format("%."..config.decimal_precision.."f", value)
         end
+        
+        -- add this field  to the list of fields
+        table.insert(fields, influxdb_kv_fmt(name).."="..tostring(influxdb_kv_fmt(value)))
+    end
 
-        -- Format the line differently based on the presence of tags
-        -- i.e. length of the tags table is > 0
-        if tags and #tags > 0 then
-            insert_value = string.format("%s,%s %s=%s %d", influxdb_kv_fmt(name), table.concat(tags, ","),
-                                         config.value_field_key, value, message_timestamp)
-            table.insert(api_message, insert_value)
-        else
-            insert_value = string.format("%s %s=%s %d", influxdb_kv_fmt(name), config.value_field_key, value,
-                                         message_timestamp)
-            table.insert(api_message, insert_value)
-        end
+    -- @mo Format the line differently based on the presence of tags and fields 
+    -- both fields and tags are present
+    if tags and #tags > 0 and fields and #fields > 0 then
+        api_message = string.format("%s,%s %s %d", influxdb_kv_fmt(name_prefix), table.concat(tags, ","),
+                                     table.concat(fields, ","), message_timestamp)
+    -- only fields, no tags
+    elseif fields and #fields > 0 then
+        api_message = string.format("%s %s %d", influxdb_kv_fmt(name_prefix), table.concat(fields, ","),
+                                     message_timestamp)
     end
 
     return api_message
@@ -588,7 +578,7 @@ function process_message()
     if #api_messages == batch_max_count then
        local output = ""
        for k,v in pairs(api_messages) do
-          output = output..table.concat(v, "\n").."\n"
+          output = output..v.."\n"
        end
        inject_payload("txt", "influxdbbatch9", output)
        api_messages = {}
@@ -603,7 +593,7 @@ function timer_event(ns)
    if #api_messages > 0 then
       local output = ""
       for k,v in pairs(api_messages) do
-        output = output..table.concat(v, "\n").."\n"
+        output = output..v.."\n"
       end
       inject_payload("txt", "influxdbbatch9", output)
       api_messages = {}
