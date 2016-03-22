@@ -438,13 +438,16 @@ local function points_tags_tables(config)
     return points, tags
 end
 
-function influxdb_line_msg(config)
+function influxdb_line_msg(config, current_count)
     local name_prefix = config.name_prefix or ""
     if config.interp_name_prefix then
         name_prefix = interpolate_from_msg(name_prefix)
     end
     local api_message = ""
     local message_timestamp = message_timestamp(config.timestamp_precision)
+    -- TODO: remove this fake increase in precision
+    -- Converting our sec resolution to be ms
+    message_timestamp = message_timestamp + (current_count % 1000)
     local points, tags = points_tags_tables(config)
     local fields = {}
 
@@ -454,8 +457,8 @@ function influxdb_line_msg(config)
     for name, value in pairs(points) do
         -- Wrap in double quotes and escape embedded double quotes
         -- as defined by the protocol.
-        if type(value) == "string" then
-            value = '"'..value:gsub('"', '\\"')..'"'
+        if type(value) == "string" or type(value) == "boolean" then
+            value = '"'..tostring(value):gsub('"', '\\"')..'"'
         end
 
         -- Always send numbers as formatted floats, so InfluxDB will accept
@@ -559,6 +562,11 @@ local decoder_config = {
 
 local config = set_config(decoder_config)
 
+-- TODO: remove this current_batch_count used to convert sec timestamps to ms
+-- because InfluxDB will dedupe metrics with the same tags and timestamp
+-- keep increasing across batches incase the batch ends mid-second
+-- we mod it by 1000 to make sure we are not updating sec.
+local current_batch_count = 0
 api_messages = {}
 batch_max_count = read_config("max_count") or 20
 
@@ -569,7 +577,9 @@ batch_max_count = read_config("max_count") or 20
 function process_message()
     -- Inject a new message with the payload populated with the newline
     -- delimited data points, and append a newline at the end for the last line
-    api_message = influxdb_line_msg(config)
+    api_message = influxdb_line_msg(config, current_batch_count)
+    current_batch_count = current_batch_count + 1 
+    -- TODO: remove this ^. Used for fake converting to ms resolution
 
     table.insert(api_messages, api_message)
     if #api_messages == batch_max_count then
