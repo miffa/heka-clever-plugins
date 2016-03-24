@@ -14,6 +14,8 @@ Config:
     Should we assume that the entire payload is json parsable. When set to 
     `false` non-json string in the payload are added to `_prefix` and `_postfix`
     fields respectively.
+- keep_payload (boolean, optional, default false):
+    Always preserve the original log line in the message payload.
 
 *Example Heka Configuration*
 
@@ -32,6 +34,7 @@ Config:
         [JsonDecoder.config]
         type = "json"
         strict = true
+        payload_keep = True
 --]]
 
 require "cjson"
@@ -42,6 +45,11 @@ local strict_parsing = read_config("strict")
 if strict_parsing == nil or strict_parsing == '' then
     strict_parsing = true
 end
+local keep_payload = read_config("payload_keep")
+if keep_payload == nil or keep_payload == '' then
+    keep_payload = false
+end
+
 
 function process_message()
     local payload = read_message("Payload")
@@ -74,7 +82,12 @@ function process_message()
     if not ok then return -1 end
     if type(json) ~= "table" then return -1 end
 
-    write_message("Payload", cjson.encode(json))
+    if keep_payload then
+        write_message("Payload", cjson.encode(json))
+    else
+        -- Clear the payload now that it is all parsed
+        write_message("Payload", "")
+    end
     write_message("Fields[_prefix]", prefix)
     write_message("Fields[_postfix]", postfix)
 
