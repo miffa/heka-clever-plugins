@@ -86,10 +86,8 @@ function process_message()
         write_message("Payload", cjson.encode(json))
     else
         -- Clear the payload now that it is all parsed
-        write_message("Payload", "")
+        write_message("Payload", prefix .. " " .. postfix)
     end
-    write_message("Fields[_prefix]", prefix)
-    write_message("Fields[_postfix]", postfix)
 
     for k, v in pairs(json) do
         -- nested json strings are not supported, stringify them
