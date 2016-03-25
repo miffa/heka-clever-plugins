@@ -1,3 +1,6 @@
+env:
+- REPORT_CARD_GITHUB_STATUS_TOKEN=$$report_card_github_status_token
+- REPORT_CARD_GITHUB_REPO_TOKEN=$$report_card_github_repo_token
 image: go1.2
 services:
   - postgres
@@ -12,6 +15,7 @@ notify:
     room: Clever-Dev-CI
     token: {{hipchatToken}}
 script:
+- sudo pip install -q git+https://$REPORT_CARD_GITHUB_REPO_TOKEN@github.com/Clever/report-card.git; GITHUB_API_TOKEN=$REPORT_CARD_GITHUB_STATUS_TOKEN report-card --publish || true
   - createdb -h localhost -U postgres drone
   - psql -U postgres -h localhost -c "CREATE TABLE \"mock_table\" (s text, i int)" drone
   - cd postgres
