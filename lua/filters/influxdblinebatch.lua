@@ -193,13 +193,15 @@ function encode_tags(value)
     return values
 end
 
-
 -- Modified to handle extra config and change handling of tag fields
 -- @mo * removing references to Carbon handling to simplify reasoning
 --     * following the line protocol spec at 
 --           https://docs.influxdata.com/influxdb/v0.10/write_protocols/line/
 --     * adding support for multiple fields in the same line
 local function tags_fields_tables(config)
+    local used_tag_fields = config.used_tag_fields
+    local skip_fields = config.skip_fields
+
     -- Initialize the tags table, including base field tag values in
     -- list if the magic **all** or **all_base** config values are
     -- defined.
@@ -252,8 +254,8 @@ end
 function influxdb_line_msg(config)
     -- reduce timestamp precision if it's not heka default of ns
     local ts
-    if config.time_precision  and config.time_precision ~= 'ns' then
-        ts = field_util.message_timestamp(config.time_precision)
+    if config.timestamp_precision  and config.timestamp_precision ~= 'ns' then
+        ts = field_util.message_timestamp(config.timestamp_precision)
     else
         ts = read_message('Timestamp')
     end
@@ -279,7 +281,6 @@ end
 
 function set_config(client_config)
     local module_config = client_config
-
     -- Remove blacklisted fields from the set of base fields that we use, and
     -- create a table of dynamic fields to skip.
     if module_config.skip_fields_str then
@@ -292,7 +293,7 @@ function set_config(client_config)
     if module_config.tag_fields_str then
         module_config.used_tag_fields,
         module_config.tag_fields_all_base,
-        module_config.tag_fields_all = field_map(client_config.tag_fields_str)
+        module_config.tag_fields_all = field_util.field_map(client_config.tag_fields_str)
     end
 
     -- Cache whether or not name needs interpolation
@@ -339,7 +340,7 @@ function process_message()
        for _,v in pairs(api_messages) do
           output = output..v.."\n"
        end
-       inject_payload("txt", "influxdbbatch9", output)
+       inject_payload("txt", config.payload_name, output)
        api_messages = {}
     end
 
@@ -354,7 +355,7 @@ function timer_event(ns)
       for k,v in pairs(api_messages) do
         output = output..v.."\n"
       end
-      inject_payload("txt", "influxdbbatch9", output)
+      inject_payload("txt", config.payload_name, output)
       api_messages = {}
    end
 end
