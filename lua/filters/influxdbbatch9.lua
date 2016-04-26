@@ -4,13 +4,8 @@
 
 --[=[
 Converts full Heka message contents to line protocol for InfluxDB HTTP write API
-(new in InfluxDB v0.9.0).  Optionally includes all standard message fields
-as tags or fields and iterates through all of the dynamic fields to add as
-points (series), skipping any fields explicitly omitted using the `skip_fields`
-config option.  It can also map any Heka message fields as tags in the
-request sent to the InfluxDB write API, using the `tag_fields` config option.
-All dynamic fields in the Heka message are converted to separate points
-separated by newlines that are submitted to InfluxDB.
+(new in InfluxDB v0.9.0). This filter converts each Heka message into one InfluxDB
+line and seperates multiple lines with `\n`. The `name` is re-evaluated for each line.
 
 .. note::
     This encoder is intended for use with InfluxDB versions 0.9 or greater. If
@@ -27,8 +22,8 @@ Config:
     forcing all numbers to floats, we ensure that InfluxDB will always
     accept our numerical values, regardless of the initial format.
 
-- name (string, optional, default nil)
-    String to use as the `name` key's prefix value in the generated line.
+- name (string, required)
+    String to use as the metric `name` in the generated line.
     Supports :ref:`message field interpolation<sandbox_msg_interpolate_module>`.
     `%{fieldname}`. Any `fieldname` values of "Type", "Payload", "Hostname",
     "Pid", "Logger", "Severity", or "EnvVersion" will be extracted from the
@@ -41,14 +36,13 @@ Config:
     values will be interpreted as referring to dynamic message fields.
 
 - skip_fields (string, optional, default nil)
-    Space delimited set of fields that should *not* be included in the
+    Space delimited set of fields that should *not* be included as `fields` for 
     InfluxDB measurements being generated. Any `fieldname` values of "Type",
     "Payload", "Hostname", "Pid", "Logger", "Severity", or "EnvVersion" will
     be assumed to refer to the corresponding field from the base message
     schema. Any other values will be assumed to refer to a dynamic message
     field. The magic value "**all_base**" can be used to exclude base fields
-    from being mapped to the event altogether (useful if you don't want to
-    use tags and embed them in the name_prefix instead).
+    from being mapped to the event altogether. Does not interact with `tag_fields`.
 
 - tag_fields (string, optional, default "**all_base**")
     Take fields defined and add them as tags of the measurement(s) sent to
@@ -154,12 +148,12 @@ function escape_string(str)
     return tostring(str):gsub("([ ,])", "\\%1")
 end
 
-function encode_scalar_value(value)
+function encode_scalar_value(value, decimal_precision)
     if type(value) == "number" then
         -- Always send numbers as formatted floats, so InfluxDB will accept
         -- them if they happen to change from ints to floats between
         -- points in time.  Forcing them to always be floats avoids this.
-        return string.format("%.6f", value)
+        return string.format("%."..tostring(decimal_precision).."f", value)
     elseif type(value) == "string" then
         -- first unescape already escaped `"`
         value_dec = value:gsub('\\"', '"')
@@ -171,17 +165,17 @@ function encode_scalar_value(value)
     end
 end
 
-function encode_fields(value)
+function encode_fields(value, decimal_precision)
     local values = {}
     if type(value) == "table" then
         for k,v in pairs(value) do
             table.insert(
                 values,
-                string.format("%s=%s", escape_string(k), encode_scalar_value(v))
+                string.format("%s=%s", escape_string(k), encode_scalar_value(v, decimal_precision))
             )
         end
     else
-        values["value"] = encode_scalar_value(value)
+        values["value"] = encode_scalar_value(value, decimal_precision)
     end
     return values
 end
@@ -252,14 +246,14 @@ local function tags_fields_tables(config)
         return 0
     end
 
-    return encode_fields(fields), encode_tags(tags)
+    return encode_fields(fields, config.decimal_precision), encode_tags(tags)
 end
 
 function influxdb_line_msg(config)
     -- reduce timestamp precision if it's not heka default of ns
     local ts
-    if time_precision  and time_precision ~= 'ns' then
-        ts = field_util.message_timestamp(time_precision)
+    if config.time_precision  and config.time_precision ~= 'ns' then
+        ts = field_util.message_timestamp(config.time_precision)
     else
         ts = read_message('Timestamp')
     end
@@ -310,7 +304,7 @@ function set_config(client_config)
     return module_config
 end
 
-local decoder_config = {
+local filter_config = {
     name = read_config("name") or nil,
     decimal_precision = read_config("decimal_precision") or "6",
     skip_fields_str = read_config("skip_fields") or nil,
@@ -325,7 +319,7 @@ local decoder_config = {
 --
 --------------------------------
 
-local config = set_config(decoder_config)
+local config = set_config(filter_config)
 
 api_messages = {}
 batch_max_count = read_config("max_count") or 20
