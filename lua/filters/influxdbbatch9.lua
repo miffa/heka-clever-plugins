@@ -27,7 +27,7 @@ Config:
     forcing all numbers to floats, we ensure that InfluxDB will always
     accept our numerical values, regardless of the initial format.
 
-- name_prefix (string, optional, default nil)
+- name (string, optional, default nil)
     String to use as the `name` key's prefix value in the generated line.
     Supports :ref:`message field interpolation<sandbox_msg_interpolate_module>`.
     `%{fieldname}`. Any `fieldname` values of "Type", "Payload", "Hostname",
@@ -40,11 +40,6 @@ Config:
     "Timestamp" or the "Uuid" message fields into the name, those
     values will be interpreted as referring to dynamic message fields.
 
-- name_prefix_delimiter (string, optional, default nil)
-    String to use as the delimiter between the name_prefix and the field
-    name.  This defaults to a blank string but can be anything else
-    instead (such as "." to use Graphite-like naming).
-
 - skip_fields (string, optional, default nil)
     Space delimited set of fields that should *not* be included in the
     InfluxDB measurements being generated. Any `fieldname` values of "Type",
@@ -54,15 +49,6 @@ Config:
     field. The magic value "**all_base**" can be used to exclude base fields
     from being mapped to the event altogether (useful if you don't want to
     use tags and embed them in the name_prefix instead).
-
-- source_value_field (string, optional, default nil)
-    If the desired behavior of this encoder is to extract one field from the
-    Heka message and feed it as a single line to InfluxDB, then use this option
-    to define which field to find the value from.  Be careful to set the
-    name_prefix field if this option is present or no measurement name
-    will be present when trying to send to InfluxDB.  When this option is
-    present, no other fields besides this one will be sent to InfluxDB as
-    a measurement whatsoever.
 
 - tag_fields (string, optional, default "**all_base**")
     Take fields defined and add them as tags of the measurement(s) sent to
@@ -80,11 +66,6 @@ Config:
     by 1e6, but this math can be altered by specifying one of the precision
     values supported by the InfluxDB write API (ms, s, m, h). Other precisions
     supported by InfluxDB of n and u are not yet supported.
-
-- value_field_key (string, optional, default "value")
-    This defines the name of the InfluxDB measurement.  We default this to "value"
-    to match the examples in the InfluxDB documentation, but you can replace
-    that with anything else that you prefer.
 
 *Example Heka Configuration*
 
@@ -139,263 +120,115 @@ Config:
 
 --]=]
 
-local decode_message = decode_message
-local ipairs = ipairs
-local math = require "math"
-local read_config = read_config
-local read_message = read_message
-local pairs = pairs
+local interp = require "msg_interpolate"
+local field_util = require "field_util"
+
 local string = require "string"
 local table = require "table"
+
+local decode_message = decode_message
+local read_config = read_config
+local read_message = read_message
+
+local ipairs = ipairs
+local pairs = pairs
 local tostring = tostring
 local type = type
-local os = require "os"
-
-local pattern = "%%{(.-)}"
-local _secs
-
-local interp_fields = {
-    Type = "Type",
-    Hostname = "Hostname",
-    Pid = "Pid",
-    UUID = "Uuid",
-    Logger = "Logger",
-    EnvVersion = "EnvVersion",
-    Severity = "Severity"
-}
 
 ------------------------
 --
---  msg_interpolate.lua
+--  Private Interface
+--  some functions borrwoed from ts_line_protocol.lua
 --
 ------------------------
-local function interpolate_match(match)
-    -- First see if it's a primary message schema field.
-    local fname = interp_fields[match]
-    if fname then
-        return read_message(fname)
+
+local function name_prefill(config)
+    local name = config.name or ""
+    if config.interp_name then
+        name = interp.interpolate_from_msg(name)
     end
-    -- Second check for a dynamic field.
-    fname = string.format("Fields[%s]", match)
-    local fval = read_message(fname)
-    if type(fval) == "boolean" then
-        return tostring(fval)
-    elseif fval then
-        return fval
-    end
-    -- Finally try to use it as a strftime format string.
-    fval = os.date(match, _secs)
-    if fval ~= match then  -- Only return it if a substitution happened.
-        return fval
+    return name
+end
+
+function escape_string(str)
+    return tostring(str):gsub("([ ,])", "\\%1")
+end
+
+function encode_scalar_value(value)
+    if type(value) == "number" then
+        -- Always send numbers as formatted floats, so InfluxDB will accept
+        -- them if they happen to change from ints to floats between
+        -- points in time.  Forcing them to always be floats avoids this.
+        return string.format("%.6f", value)
+    elseif type(value) == "string" then
+        -- first unescape already escaped `"`
+        value_dec = value:gsub('\\"', '"')
+        -- string values need to be double quoted
+        return '"' .. value_dec:gsub('"', '\\"') .. '"'
+    elseif type(value) == "boolean" then
+        -- don't quote booleans
+        return tostring(value)
     end
 end
 
-function interpolate_from_msg(value, secs)
-    _secs = secs
-    return string.gsub(value, pattern, interpolate_match)
-end
-
--------------------------------
---
---  End of msg_interpolate.lua
---
--------------------------------
-
-------------------------
---
---  field_util.lua
---
-------------------------
-
-base_fields_list = {
-    EnvVersion = true,
-    Hostname = true,
-    Logger = true,
-    Payload = true,
-    Pid = true,
-    Severity = true,
-    Type = true
-}
-
-base_fields_tag_list = {
-    Hostname = true,
-    Logger = true,
-    Severity = true,
-    Type = true
-}
-
-local function timestamp_divisor(timestamp_precision)
-    -- Default is to divide ns to ms
-    local timestamp_divisor = 1e6
-    -- Divide ns to s
-    if timestamp_precision == "s" then
-        timestamp_divisor = 1e9
-    -- Divide ns to m
-    elseif timestamp_precision == "m" then
-        timestamp_divisor = 1e9 * 60
-    -- Divide ns to h
-    elseif timestamp_precision == "h" then
-        timestamp_divisor = 1e9 * 60 * 60
-    end
-    return timestamp_divisor
-end
-
-function field_map(fields_str)
-    local fields = {}
-    local all_base_fields = false
-    local all_fields = false
-
-    if fields_str and fields_str ~= "" then
-        for field in string.gmatch(fields_str, "[%S]+") do
-            fields[field] = true
-            if field == "**all_base**" then
-                all_base_fields = true
-            end
-            if field == "**all**" then
-                all_fields = true
-            end
-        end
-
-        if all_base_fields or all_fields then
-            for field in pairs(base_fields_list) do
-                fields[field] = true
-            end
+function encode_fields(value)
+    local values = {}
+    if type(value) == "table" then
+        for k,v in pairs(value) do
+            table.insert(
+                values,
+                string.format("%s=%s", escape_string(k), encode_scalar_value(v))
+            )
         end
     else
-        fields = base_fields_list
-        all_base_fields = true
-    end
-
-    return fields, all_base_fields, all_fields
-end
-
-function message_timestamp(timestamp_precision)
-    local message_timestamp = read_message("Timestamp")
-    message_timestamp = math.floor(message_timestamp / timestamp_divisor(timestamp_precision))
-    return message_timestamp
-end
-
--- Modified from original to find fields not in skip fields
-function used_fields(base_fields, skip_fields)
-    local fields = {}
-    if skip_fields then
-        for field in pairs(base_fields) do
-            if not skip_fields[field] then
-                fields[field] = true
-            end
-        end
-    end
-    return fields
-end
-
-local function influxdb_kv_fmt(string)
-    return tostring(string):gsub("([ ,])", "\\%1")
-end
-
--- Added utility function to get field values as a table
-local function get_field_values(enabled_base_fields)
-    local columns = {}
-    local values = {}
-
-    columns[1] = "time" -- InfluxDB's default
-    values[1] = {name="Timestamp",value={(read_message("Timestamp")/ 1e6)}}
-
-    local place = 2
-    for _, field in ipairs(enabled_base_fields) do
-        columns[place] = field
-        values[place] = {name=field, value={read_message(field)}}
-        place = place + 1
-    end
-
-    local seen = {}
-    local seen_count
-    while true do
-        local typ, name, value, representation, count = read_next_field()
-        if not typ then break end
-
-        if name ~= "Timestamp" and typ ~= 1 then -- exclude bytes
-            seen_count = seen[name]
-            if not seen_count then
-                columns[place] = name
-                seen[name] = 1
-                seen_count = 1
-            else
-                seen_count = seen_count + 1
-                seen[name] = seen_count
-                columns[place] = name..tostring(seen_count)
-            end
-            if count == 1 then
-                values[place] = {name=name, value={value}}
-            else
-                values[place] = {name=name, value={get_array_value(name, seen_count-1, count)}}
-            end
-            place = place + 1
-        end
+        values["value"] = encode_scalar_value(value)
     end
     return values
 end
---------------------------
---
---  End of field_util.lua
---
---------------------------
 
-------------------------
---
---  ts_line_protocol.lua
---
-------------------------
+function encode_tags(value)
+    local values = {}
+    for k,v in pairs(value) do
+        table.insert(
+            values,
+            string.format("%s=%s",
+                escape_string(k), escape_string(v))
+        )
+    end
+
+    return values
+end
+
 
 -- Modified to handle extra config and change handling of tag fields
 -- @mo * removing references to Carbon handling to simplify reasoning
 --     * following the line protocol spec at 
 --           https://docs.influxdata.com/influxdb/v0.10/write_protocols/line/
 --     * adding support for multiple fields in the same line
-local function points_tags_tables(config)
-    local name_prefix = config.name_prefix or ""
-    if config.interp_name_prefix then
-        name_prefix = interpolate_from_msg(name_prefix)
-    end
-    local key_name = config.key_name
-    if config.interp_key_name then
-        key_name = interpolate_from_msg(key_name)
-    end
-    local key_field = config.key_field
-    local name_prefix_delimiter = config.name_prefix_delimiter or ""
-    local used_tag_fields = config.used_tag_fields
-    local skip_fields = config.skip_fields
-
+local function tags_fields_tables(config)
     -- Initialize the tags table, including base field tag values in
     -- list if the magic **all** or **all_base** config values are
     -- defined.
     local tags = {}
-    local testoutput = ""
-    if (config.tag_fields_all
-        or config.tag_fields_all_base
-        or config.used_tag_fields) then
-            for field in pairs(used_fields(base_fields_tag_list, config.skip_fields)) do
-                if config.tag_fields_all or config.tag_fields_all_base or used_tag_fields[field] then
-                    local value = read_message(field)
-                    table.insert(tags, influxdb_kv_fmt(field).."="..tostring(influxdb_kv_fmt(value)))
-                end
+    if (config.tag_fields_all or config.tag_fields_all_base or config.used_tag_fields) then
+        for field in pairs(field_util.used_base_fields(config.skip_fields)) do
+            if config.tag_fields_all or config.tag_fields_all_base or used_tag_fields[field] then
+                tags[field] = read_message(field)
             end
+        end
     end
 
     -- Initialize the table of data points and populate it with data
     -- from the Heka message.  When skip_fields includes "**all_base**",
-    -- only dynamic fields are included as InfluxDB data points, while
+    -- only dynamic heka fields are included as InfluxDB data fields, while
     -- the base fields serve as tags for them. If skip_fields does not
     -- define any base fields, they are added to the fields of each data
-    -- point and each dynamic field value is set as the "value" field.
-    -- Setting skip_fields to "**all_base**" is recommended to avoid
-    -- redundant data being stored in each data point (the base fields
-    -- as fields and as tags).
-    local points = {}
+    -- point and each dynamic field value is set as fields.
+    local fields = {}
+    local msg = decode_message(read_message("raw"))
 
-    local msg_fields = get_field_values(used_fields(base_fields_list, config.skip_fields))
-
-    if msg_fields then
-        for _, field_entry in ipairs(msg_fields) do
+    if msg.Fields then
+        for _, field_entry in ipairs(msg.Fields) do
             local field = field_entry["name"]
             local value
             for _, field_value in ipairs(field_entry["value"]) do
@@ -405,118 +238,60 @@ local function points_tags_tables(config)
             -- Include the dynamic fields as tags if they are defined in
             -- configuration or the magic value "**all**" is defined.
             -- Convert value to a string as this is required by the API
-            if not config["carbon_format"]
-                and (config["tag_fields_all"]
+            if (config["tag_fields_all"]
                 or (config["used_tag_fields"] and used_tag_fields[field])) then
-                    table.insert(tags, influxdb_kv_fmt(field).."="..tostring(influxdb_kv_fmt(value)))
+                tags[field] = value
             end
 
-            if key_name then
-                if key_field then
-                    if field == key_field then
-                        points[key_name] = value
-                    end
-                else
-                    points[key_name] = value
-                end
-            elseif config["source_value_field"] then 
-                if field == config["source_value_field"] then
-                    points[name_prefix] = value
-                end
-                -- Only add fields that are not requested to be skipped
-            elseif not config["skip_fields_str"]
+            if not config["skip_fields_str"]
                 or (config["skip_fields"] and not skip_fields[field]) then
-                    -- Set the name attribute of this table by concatenating name_prefix
-                    -- with the name of this particular field
-                    points[field] = value
+                    fields[field] = value
             end
         end
     else
         return 0
     end
 
-    return points, tags
+    return encode_fields(fields), encode_tags(tags)
 end
 
-function influxdb_line_msg(config, current_count)
-    local name_prefix = config.name_prefix or ""
-    if config.interp_name_prefix then
-        name_prefix = interpolate_from_msg(name_prefix)
+function influxdb_line_msg(config)
+    -- reduce timestamp precision if it's not heka default of ns
+    local ts
+    if time_precision  and time_precision ~= 'ns' then
+        ts = field_util.message_timestamp(time_precision)
+    else
+        ts = read_message('Timestamp')
     end
-    local api_message = ""
-    local message_timestamp = message_timestamp(config.timestamp_precision)
-    -- TODO: remove this fake increase in precision
-    -- Converting our sec resolution to be ms
-    message_timestamp = message_timestamp + (current_count % 1000)
-    local points, tags = points_tags_tables(config)
-    local fields = {}
 
-    -- Build a table of data points that we will eventually convert
-    -- to a newline delimited list of InfluxDB write API line protocol
-    -- formatted values that are then injected back into the pipeline.
-    for name, value in pairs(points) do
-        -- Wrap in double quotes and escape embedded double quotes
-        -- as defined by the protocol.
-        if type(value) == "string" or type(value) == "boolean" then
-            value = '"'..tostring(value):gsub('"', '\\"')..'"'
-        end
-
-        -- Always send numbers as formatted floats, so InfluxDB will accept
-        -- them if they happen to change from ints to floats between
-        -- points in time.  Forcing them to always be floats avoids this.
-        -- Use the decimal_precision config option to control the
-        -- numbers after the decimal that are printed.
-        if type(value) == "number" or string.match(value, "^[%d.]+$") then
-            value = string.format("%."..config.decimal_precision.."f", value)
-        end
-        
-        -- add this field  to the list of fields
-        table.insert(fields, influxdb_kv_fmt(name).."="..tostring(influxdb_kv_fmt(value)))
-    end
+    local name = name_prefill(config)
+    local fields, tags = tags_fields_tables(config)
 
     -- @mo Format the line differently based on the presence of tags and fields 
     -- both fields and tags are present
+    local api_message = ""
+    -- TODO: @mo sort tags since influx like that for performance
     if tags and #tags > 0 and fields and #fields > 0 then
-        api_message = string.format("%s,%s %s %d", influxdb_kv_fmt(name_prefix), table.concat(tags, ","),
-                                     table.concat(fields, ","), message_timestamp)
-    -- only fields, no tags
+        api_message = string.format("%s,%s %s %d", escape_string(name), table.concat(tags, ","),
+                                     table.concat(fields, ","), ts)
+    -- only fields, no tags. at least one field is required by the line protocol
     elseif fields and #fields > 0 then
-        api_message = string.format("%s %s %d", influxdb_kv_fmt(name_prefix), table.concat(fields, ","),
-                                     message_timestamp)
+        api_message = string.format("%s %s %d", escape_string(name), table.concat(fields, ","),
+                                     ts)
     end
 
     return api_message
 end
 
 function set_config(client_config)
-    -- Initialize table with default values for ts_line_protocol module
-    local module_config = {
-        carbon_format = false,
-        decimal_precision = "6",
-        key_field = false,
-        key_name = false,
-        name_prefix = false,
-        name_prefix_delimiter = false,
-        skip_fields_str = false,
-        source_value_field = false,
-        tag_fields_str = "**all_base**",
-        timestamp_precision = "ms",
-        value_field_key = "value"
-    }
-
-    -- Update module_config defaults with those found in client configs
-    for option in pairs(module_config) do
-        if client_config[option] then
-            module_config[option] = client_config[option]
-        end
-    end
+    local module_config = client_config
 
     -- Remove blacklisted fields from the set of base fields that we use, and
     -- create a table of dynamic fields to skip.
     if module_config.skip_fields_str then
         module_config.skip_fields,
-        module_config.skip_fields_all_base = field_map(client_config.skip_fields_str)
-        module_config.used_base_fields = used_fields(base_fields_list, module_config.skip_fields)
+        module_config.skip_fields_all_base = field_util.field_map(client_config.skip_fields_str)
+        module_config.used_base_fields = field_util.used_base_fields(module_config.skip_fields)
     end
 
     -- Create and populate a table of fields to be used as tags
@@ -526,47 +301,32 @@ function set_config(client_config)
         module_config.tag_fields_all = field_map(client_config.tag_fields_str)
     end
 
-    -- Cache whether or not name_prefix needs interpolation
-    module_config.interp_name_prefix = false
-    if module_config.name_prefix and string.find(module_config.name_prefix, "%%{[%w%p]-}") then
-        module_config.interp_name_prefix = true
-    end
-
-    -- Cache whether or not key_name needs interpolation
-    module_config.interp_key_name = false
-    if module_config.key_name and string.find(module_config.key_name, "%%{[%w%p]-}") then
-        module_config.interp_key_name = true
+    -- Cache whether or not name needs interpolation
+    module_config.interp_name = false
+    if module_config.name and string.find(module_config.name, "%%{[%w%p]-}") then
+        module_config.interp_name = true
     end
 
     return module_config
 end
 
 local decoder_config = {
+    name = read_config("name") or nil,
     decimal_precision = read_config("decimal_precision") or "6",
-    key_field = read_config("key_field") or nil,
-    key_name = read_config("key_name") or nil,
-    name_prefix = read_config("name_prefix") or nil,
-    name_prefix_delimiter = read_config("name_prefix_delimiter") or nil,
     skip_fields_str = read_config("skip_fields") or nil,
-    source_value_field = read_config("source_value_field") or nil,
     tag_fields_str = read_config("tag_fields") or "**all_base**",
     timestamp_precision = read_config("timestamp_precision") or "ms",
-    value_field_key = read_config("value_field_key") or "value"
+    payload_name = read_config("payload_name") or "influxdblinebatch",
 }
 
 --------------------------------
 --
---  End of ts_line_protocol.lua
+--  End of private functions
 --
 --------------------------------
 
 local config = set_config(decoder_config)
 
--- TODO: remove this current_batch_count used to convert sec timestamps to ms
--- because InfluxDB will dedupe metrics with the same tags and timestamp
--- keep increasing across batches incase the batch ends mid-second
--- we mod it by 1000 to make sure we are not updating sec.
-local current_batch_count = 0
 api_messages = {}
 batch_max_count = read_config("max_count") or 20
 
@@ -578,13 +338,11 @@ function process_message()
     -- Inject a new message with the payload populated with the newline
     -- delimited data points, and append a newline at the end for the last line
     api_message = influxdb_line_msg(config, current_batch_count)
-    current_batch_count = current_batch_count + 1 
-    -- TODO: remove this ^. Used for fake converting to ms resolution
 
     table.insert(api_messages, api_message)
     if #api_messages == batch_max_count then
        local output = ""
-       for k,v in pairs(api_messages) do
+       for _,v in pairs(api_messages) do
           output = output..v.."\n"
        end
        inject_payload("txt", "influxdbbatch9", output)
