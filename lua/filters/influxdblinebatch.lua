@@ -155,9 +155,9 @@ function encode_scalar_value(value, decimal_precision)
         -- points in time.  Forcing them to always be floats avoids this.
         return string.format("%."..tostring(decimal_precision).."f", value)
     elseif type(value) == "string" then
-        -- first unescape already escaped `"`
-        value_dec = value:gsub('\\"', '"')
-        -- string values need to be double quoted
+        -- first unescape `"` and then escape `\`
+        value_dec = tostring(value):gsub('\\"', '"'):gsub('\\', '\\\\')
+        -- string values need to be double quoted. and escape `"`
         return '"' .. value_dec:gsub('"', '\\"') .. '"'
     elseif type(value) == "boolean" then
         -- don't quote booleans
