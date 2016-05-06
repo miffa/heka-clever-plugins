@@ -3,7 +3,6 @@ require "string"
 require "table"
 
 local cjson = require("cjson")
-
 --[=[
 -- Encodes a message to be passed to Slack, using HTTP output
 -- Chat text is read from Fields[text_field]
@@ -66,7 +65,7 @@ local text_field = read_config("text_field") or nil
 -- Cache whether or not msg is interpolated
 local interp_msg = false
 if msg and string.find(msg, "%%{[%w%p]-}") then
-    module_config.interp_name = true
+    interp_msg = true
 end
 
 function format_msg()
