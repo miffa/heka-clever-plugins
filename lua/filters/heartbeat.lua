@@ -8,6 +8,7 @@ Config:
 
 - ticker_interval (int, optional, defaults to 1)
 - hostname (string, optional, defaults to 'unknown')
+- environment (string, optional, defaults to 'unknown')
 
 --]]
 
@@ -17,6 +18,7 @@ require "os"
 require "table"
 
 local hostname = read_config("hostname") or "unknown"
+local environment = read_config("environment") or "unknown"
 
 -- SignalFx metric name for logparser delay
 local metric_name_delay = read_config("metric_name_delay") or "log-monitor-delay"
@@ -96,7 +98,7 @@ function timer_event(ns)
   local datapoint = {
     metric = metric_name_delay,
     value = latest_heartbeat_detected - latest_heartbeat_timestamp,
-    dimensions = {hostname=hostname}
+    dimensions = {hostname=hostname, environment=environment}
   }
   table.insert(gauges, datapoint)
   output.gauge = gauges
