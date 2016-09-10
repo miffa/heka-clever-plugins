@@ -82,4 +82,12 @@ function inject_payload(payload_type, payload_name, data)
     })
 end
 
+function decode_message(s)
+    debug("heka.decode_message: " .. tostring(s))
+    -- decode_message(heka_protobuf_string)
+    --  * actual behavior: Converts a Heka protobuf encoded message string into a Lua table.
+    --  * mocked behavior: No-op. Return the string without modification.
+    return s
+end
+
 return module
