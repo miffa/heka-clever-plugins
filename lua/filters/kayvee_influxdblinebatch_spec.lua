@@ -25,6 +25,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
     local mock_msg = {}
     mock_msg['Timestamp'] = 2000000
     local raw_msg = {}
+    -- 'raw' is a special value. if read_message('raw') is called, it returns the underlying message struct
     mock_msg.raw = raw_msg
 	raw_msg['Fields'] = {
         {
@@ -83,6 +84,8 @@ describe("Kayvee Influxdbline Batch Filter", function()
 
         -- Test
         assert.equals(process_message(), 0, "Should process_message successfuly")
+        assert.equals(process_message(), 0, "Should process_message successfuly")
+        flush()
     end)
 
     --it("should label gauges separately from counters", function()

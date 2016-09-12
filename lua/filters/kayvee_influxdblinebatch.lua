@@ -231,7 +231,7 @@ local function tags_fields_tables(config)
 
     local msg = decode_message(read_message("raw"))
 
-	print("message")
+	print("msg=")
 	util.print_r(msg)
 
     if msg.Fields then
@@ -354,28 +354,27 @@ function process_message()
 
     table.insert(api_messages, api_message)
     if #api_messages == batch_max_count then
-       local output = ""
-       for _,v in pairs(api_messages) do
-          output = output..v.."\n"
-       end
-       inject_payload("txt", config.payload_name, output)
-       api_messages = {}
+        flush()
     end
 
     return 0
 end
 
 function timer_event(ns)
-   -- details of the lua sandbox guarantee that this timer
-   -- does not get called in the middle of a process_message call
-   if #api_messages > 0 then
-      local output = ""
-      for k,v in pairs(api_messages) do
+    -- details of the lua sandbox guarantee that this timer
+    -- does not get called in the middle of a process_message call
+    flush()
+end
+
+function flush()
+    if #api_messages > 0 then
+        local output = ""
+        for k,v in pairs(api_messages) do
         output = output..v.."\n"
-      end
-      inject_payload("txt", config.payload_name, output)
-      api_messages = {}
-   end
+        end
+        inject_payload("txt", config.payload_name, output)
+        api_messages = {}
+    end
 end
 
 --
