@@ -319,14 +319,6 @@ function set_config(client_config)
     return module_config
 end
 
-local filter_config = {
-    name = read_config("name") or nil,
-    decimal_precision = read_config("decimal_precision") or "6",
-    skip_fields_str = read_config("skip_fields") or nil,
-    tag_fields_str = read_config("tag_fields") or "**all_base**",
-    timestamp_precision = read_config("timestamp_precision") or "ms",
-    payload_name = read_config("payload_name") or "influxdblinebatch",
-}
 
 --------------------------------
 --
@@ -335,6 +327,15 @@ local filter_config = {
 --------------------------------
 local config
 function configure()
+    print("configure()")
+    local filter_config = {
+        name = read_config("name") or nil,
+        decimal_precision = read_config("decimal_precision") or "6",
+        skip_fields_str = read_config("skip_fields") or nil,
+        tag_fields_str = read_config("tag_fields") or "**all_base**",
+        timestamp_precision = read_config("timestamp_precision") or "ms",
+        payload_name = read_config("payload_name") or "influxdblinebatch",
+    }
     config = set_config(filter_config)
 	util.print_r(config)
 end
