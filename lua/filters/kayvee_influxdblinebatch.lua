@@ -137,9 +137,42 @@ local type = type
 ------------------------
 --
 --  Private Interface
---  some functions borrwoed from ts_line_protocol.lua
 --
 ------------------------
+
+local base_fields_map = {
+    Type = true,
+    Payload = true,
+    Hostname = true,
+    Pid = true,
+    Logger = true,
+    Severity = true,
+    EnvVersion = true
+}
+
+-- read_field gets the value for a field.
+-- Routes to appropriate lookup for Heka internal fields (see `base_fields_map`)
+-- or custom message fields.
+local function read_field(key)
+	if not key then return nil end
+
+    if base_fields_map[key] then
+        return read_message(key)
+    else
+        return read_message("Fields["..key.."]")
+    end
+end
+
+local function lookup_field_then_value(key)
+	if not key then return nil end
+
+    -- Get field name
+    local field_name = read_message("Fields["..key.."]")
+    if not field_name or field_name == "" then return nil end
+
+    -- Get field value
+    return read_field(field_name)
+end
 
 local function name_prefill(config)
     local name = config.name or ""
@@ -288,7 +321,10 @@ function influxdb_line_msg(config)
         ts = read_message('Timestamp')
     end
 
-    local name = name_prefill(config)
+    local series = lookup_field_then_value(config.series_field)
+    if not series then return nil end
+	name = series
+
     local fields, tags = tags_fields_tables(config)
 
     -- @mo Format the line differently based on the presence of tags and fields
@@ -333,7 +369,6 @@ function set_config(client_config)
     return module_config
 end
 
-
 --------------------------------
 --
 --  End of private functions
@@ -342,7 +377,11 @@ end
 local config
 function configure()
     local filter_config = {
-        name = read_config("name") or nil,
+        --name = read_config("name") or nil,
+		series_field = read_config("series_field"),
+        value_field = read_config("value_field"),
+        dimensions_field = read_config("dimensions_field"),
+
         decimal_precision = read_config("decimal_precision") or "6",
         skip_fields_str = read_config("skip_fields") or nil,
         tag_fields_str = read_config("tag_fields") or "**all_base**",
@@ -364,6 +403,7 @@ function process_message()
     -- Inject a new message with the payload populated with the newline
     -- delimited data points, and append a newline at the end for the last line
     api_message = influxdb_line_msg(config, current_batch_count)
+	if not api_message then return -1 end
 
     table.insert(api_messages, api_message)
     if #api_messages == batch_max_count then
