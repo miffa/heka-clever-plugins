@@ -170,24 +170,41 @@ function encode_scalar_value(value, decimal_precision)
     end
 end
 
+function sorted_keys(map)
+	sorted = {}
+    for key in pairs(map) do table.insert(sorted, key) end
+    table.sort(sorted)
+	return sorted
+end
+
 function encode_fields(value, decimal_precision)
-    local values = {}
-    if type(value) == "table" then
-        for k,v in pairs(value) do
-            table.insert(
-                values,
-                string.format("%s=%s", escape_string(k), encode_scalar_value(v, decimal_precision))
-            )
-        end
-    else
+	local values = {}
+	if value == nil then return values end
+
+	-- Single field -- special case
+    if type(value) ~= "table" then
         values["value"] = encode_scalar_value(value, decimal_precision)
-    end
-    return values
+		return values
+	end
+
+	-- Multiple fields
+    for _,k in ipairs(sorted_keys(value)) do
+		v = value[k]
+		table.insert(
+			values,
+			string.format("%s=%s", escape_string(k), encode_scalar_value(v, decimal_precision))
+		)
+	end
+
+	return values
 end
 
 function encode_tags(value)
     local values = {}
-    for k,v in pairs(value) do
+	if value == nil then return values end
+
+    for _,k in ipairs(sorted_keys(value)) do
+		v = value[k]
         table.insert(
             values,
             string.format("%s=%s",
@@ -231,16 +248,15 @@ local function tags_fields_tables(config)
 
     local msg = decode_message(read_message("raw"))
 
-	print("msg=")
-	util.print_r(msg)
-
     if msg.Fields then
         for _, field_entry in ipairs(msg.Fields) do
-			print("field_entry", field_entry)
             local field = field_entry["name"]
             local value
             for _, field_value in ipairs(field_entry["value"]) do
+                -- Just grabs one value from the array.
+                -- Doesn't handle array type values
                 value = field_value
+                break
             end
 
             -- Include the dynamic fields as tags if they are defined in
@@ -274,8 +290,6 @@ function influxdb_line_msg(config)
 
     local name = name_prefill(config)
     local fields, tags = tags_fields_tables(config)
-	print("fields", fields)
-	print("tags", tags)
 
     -- @mo Format the line differently based on the presence of tags and fields
     -- both fields and tags are present
@@ -327,7 +341,6 @@ end
 --------------------------------
 local config
 function configure()
-    print("configure()")
     local filter_config = {
         name = read_config("name") or nil,
         decimal_precision = read_config("decimal_precision") or "6",
@@ -337,7 +350,6 @@ function configure()
         payload_name = read_config("payload_name") or "influxdblinebatch",
     }
     config = set_config(filter_config)
-	util.print_r(config)
 end
 configure()
 

@@ -70,6 +70,23 @@ function read_message(field)
     if not MOCKS.next_message then
         assert(False, "No next_message set in Heka mocks")
     end
+
+    if field == "raw" then
+        -- 'raw' is a special value. if read_message('raw') is called, it returns the underlying message struct
+        local raw_msg = {
+            Fields={}
+        }
+        for k, v in pairs(MOCKS.next_message) do
+            if not string.match(k, "Fields") then
+                local to_insert = {
+                    name=k,
+                    value={v},
+                }
+                table.insert(raw_msg.Fields, to_insert)
+            end
+        end
+        return raw_msg
+    end
     return MOCKS.next_message[field]
 end
 

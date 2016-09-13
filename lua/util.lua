@@ -70,4 +70,13 @@ function module.print_r( t )
     print()
 end
 
+-- Split multiline string into lines
+-- http://lua-users.org/wiki/SplitJoin
+function module.lines(str)
+  local t = {}
+  local function helper(line) table.insert(t, line) return "" end
+  helper((str:gsub("(.-)\r?\n", helper)))
+  return t
+end
+
 return module
