@@ -90,7 +90,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         assert.equals(4, line_count(injected[2]), "Incorrect number of Heka messages batched in payload")
     end)
 
-	it("should read message name from message data", function()
+	it("should read series name from specified field", function()
 		-- Test setup
 		test_setup()
 		mock_msg_new = util.deepcopy(mock_msg)

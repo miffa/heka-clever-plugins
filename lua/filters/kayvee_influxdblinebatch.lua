@@ -174,14 +174,6 @@ local function lookup_field_then_value(key)
     return read_field(field_name)
 end
 
-local function name_prefill(config)
-    local name = config.name or ""
-    if config.interp_name then
-        name = interp.interpolate_from_msg(name)
-    end
-    return name
-end
-
 function escape_string(str)
     return tostring(str):gsub("([ ,])", "\\%1")
 end
@@ -276,8 +268,6 @@ local function tags_fields_tables(config)
     -- define any base fields, they are added to the fields of each data
     -- point and each dynamic field value is set as fields.
     local fields = {}
-
-	local raw = read_message("raw")
 
     local msg = decode_message(read_message("raw"))
 
