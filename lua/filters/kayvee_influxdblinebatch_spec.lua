@@ -57,7 +57,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         assert.equals(1, line_count(actual_msg), "Incorrect number of Heka messages batched in payload")
         assert.equals("influxdblinebatch", actual_msg.payload_name)
         assert.equals("txt", actual_msg.payload_type)
-        assert.equals("series-name,Hostname=hostname,env=test value=100.000000 2\n", actual_msg.data)
+        assert.equals("series-name,env=test,Hostname=hostname value=100.000000 2\n", actual_msg.data)
     end)
 
     it("should batch messages", function()
@@ -96,7 +96,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         injected = mocks.injected_payloads()
         assert.equals(#injected, 1)
         actual_msg = injected[1]
-        assert.equals("series-name-new,Hostname=hostname,env=test value=100.000000 2\n", actual_msg.data)
+        assert.equals("series-name-new,env=test,Hostname=hostname value=100.000000 2\n", actual_msg.data)
     end)
 
     it("should read value from specified field", function()
@@ -112,7 +112,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         injected = mocks.injected_payloads()
         assert.equals(#injected, 1)
         actual_msg = injected[1]
-        assert.equals("series-name,Hostname=hostname,env=test value=999.000000 2\n", actual_msg.data)
+        assert.equals("series-name,env=test,Hostname=hostname value=999.000000 2\n", actual_msg.data)
     end)
 
     it("should read dimensions from specified field", function()
@@ -130,7 +130,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         injected = mocks.injected_payloads()
         assert.equals(#injected, 1)
         actual_msg = injected[1]
-        assert.equals("series-name,Hostname=hostname,custom_dim=aaa,custom_dim2=bbb,env=test value=100.000000 2\n", actual_msg.data)
+        assert.equals("series-name,custom_dim=aaa,custom_dim2=bbb,env=test,Hostname=hostname value=100.000000 2\n", actual_msg.data)
     end)
 
 

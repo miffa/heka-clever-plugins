@@ -179,11 +179,9 @@ local function encode_scalar_value(value, decimal_precision)
 end
 
 local function sorted_keys(map)
-    -- TODO: @n Do full alpha sorting instead of (A-Za-z). case sensitive currently.
-    --      depends on locale... http://lua-users.org/lists/lua-l/2009-12/msg00658.html
     sorted = {}
     for key in pairs(map) do table.insert(sorted, key) end
-    table.sort(sorted)
+    table.sort(sorted, function (a, b) return a:upper() < b:upper() end)
     return sorted
 end
 
@@ -238,7 +236,7 @@ local function tags_fields_tables(config)
         tags[k] = v
     end
 
-    -- Read default dimensions from message
+    -- Get default dimensions (these override any custom dimensions)
     local default_dims = get_dimensions(config.default_dimensions)
     for k, v in pairs(default_dims) do
         tags[k] = v
