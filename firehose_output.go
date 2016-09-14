@@ -177,7 +177,7 @@ func (f *FirehoseOutput) batchSender() {
 		select {
 		case <-f.stopChan:
 			ok = false
-			continue
+			f.sendBatch()
 		case <-f.flushTicker.C:
 			f.sendBatch()
 		case pack := <-f.batchChan:
