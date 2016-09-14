@@ -134,17 +134,8 @@ func (f *FirehoseOutput) parseFields(pack *pipeline.PipelinePack) map[string]int
 
 func (f *FirehoseOutput) ProcessMessage(pack *pipeline.PipelinePack) error {
 	atomic.AddInt64(&f.recvRecordCount, 1)
-	payload := pack.Message.GetPayload()
 	timestamp := time.Unix(0, pack.Message.GetTimestamp()).Format("2006-01-02 15:04:05.000")
-
-	// Verify input is valid json
-	object := make(map[string]interface{})
-	err := json.Unmarshal([]byte(payload), &object)
-	if err != nil {
-		// Since payload is not a json object, parse the entire pack
-		// into a map of fields and dynamic fields
-		object = f.parseFields(pack)
-	}
+	object := f.parseFields(pack)
 
 	if len(object) == 0 {
 		atomic.AddInt64(&f.droppedRecordCount, 1)
