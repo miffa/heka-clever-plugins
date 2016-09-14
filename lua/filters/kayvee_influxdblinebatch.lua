@@ -140,6 +140,12 @@ local type = type
 --
 ------------------------
 
+local function debug(msg)
+	-- TODO: Disable if debug not on
+	print("[DEBUG] " .. tostring(msg))
+end
+
+-- TODO: Refactor shared items
 local base_fields_map = {
     Type = true,
     Payload = true,
@@ -174,6 +180,14 @@ local function lookup_field_then_value(key)
     return read_field(field_name)
 end
 
+local function get_dimensions(s)
+    local dims = {}
+    for i in string.gmatch(s, "%S+") do
+        dims[i] = read_field(i)
+    end
+    return dims
+end
+
 function escape_string(str)
     return tostring(str):gsub("([ ,])", "\\%1")
 end
@@ -202,19 +216,12 @@ function sorted_keys(map)
 	return sorted
 end
 
-function encode_fields(value, decimal_precision)
+function encode_fields(fields, decimal_precision)
 	local values = {}
-	if value == nil then return values end
+	if fields == nil then return values end
 
-	-- Single field -- special case
-    if type(value) ~= "table" then
-        values["value"] = encode_scalar_value(value, decimal_precision)
-		return values
-	end
-
-	-- Multiple fields
-    for _,k in ipairs(sorted_keys(value)) do
-		v = value[k]
+    for _,k in ipairs(sorted_keys(fields)) do
+		v = fields[k]
 		table.insert(
 			values,
 			string.format("%s=%s", escape_string(k), encode_scalar_value(v, decimal_precision))
@@ -240,64 +247,31 @@ function encode_tags(value)
     return values
 end
 
--- Modified to handle extra config and change handling of tag fields
--- @mo * removing references to Carbon handling to simplify reasoning
---     * following the line protocol spec at
---           https://docs.influxdata.com/influxdb/v0.10/write_protocols/line/
---     * adding support for multiple fields in the same line
 local function tags_fields_tables(config)
-    local used_tag_fields = config.used_tag_fields
-    local skip_fields = config.skip_fields
-
-    -- Initialize the tags table, including base field tag values in
-    -- list if the magic **all** or **all_base** config values are
-    -- defined.
-    local tags = {}
-    if (config.tag_fields_all or config.tag_fields_all_base or config.used_tag_fields) then
-        for field in pairs(field_util.used_base_fields(config.skip_fields)) do
-            if config.tag_fields_all or config.tag_fields_all_base or used_tag_fields[field] then
-                tags[field] = read_message(field)
-            end
-        end
-    end
-
-    -- Initialize the table of data points and populate it with data
-    -- from the Heka message.  When skip_fields includes "**all_base**",
-    -- only dynamic heka fields are included as InfluxDB data fields, while
-    -- the base fields serve as tags for them. If skip_fields does not
-    -- define any base fields, they are added to the fields of each data
-    -- point and each dynamic field value is set as fields.
+    -- FIELDS
     local fields = {}
 
-    local msg = decode_message(read_message("raw"))
+    -- Get value
+    local value = lookup_field_then_value(config.value_field)
+    if not value then return nil end
+	fields = { value = value }
 
-    if msg.Fields then
-        for _, field_entry in ipairs(msg.Fields) do
-            local field = field_entry["name"]
-            local value
-            for _, field_value in ipairs(field_entry["value"]) do
-                -- Just grabs one value from the array.
-                -- Doesn't handle array type values
-                value = field_value
-                break
-            end
+    -- TAGS
+    local tags = {}
 
-            -- Include the dynamic fields as tags if they are defined in
-            -- configuration or the magic value "**all**" is defined.
-            -- Convert value to a string as this is required by the API
-            if (config["tag_fields_all"]
-                or (config["used_tag_fields"] and used_tag_fields[field])) then
-                tags[field] = value
-            end
+    -- Get custom dimensions
+	local dimensions_str = lookup_field_then_value(config.dimensions_field)
+	if not dimensions_str then return nil end
+	local dims = get_dimensions(dimensions_str)
+	for k, v in pairs(dims) do
+		tags[k] = v
+	end
 
-            if not config["skip_fields_str"]
-                or (config["skip_fields"] and not skip_fields[field]) then
-                    fields[field] = value
-            end
-        end
-    else
-        return nil
-    end
+	-- Read default dimensions from message
+	local default_dims = get_dimensions(config.default_dimensions)
+	for k, v in pairs(default_dims) do
+		tags[k] = v
+	end
 
     return encode_fields(fields, config.decimal_precision), encode_tags(tags)
 end
@@ -305,7 +279,7 @@ end
 function influxdb_line_msg(config)
     -- reduce timestamp precision if it's not heka default of ns
     local ts
-    if config.timestamp_precision  and config.timestamp_precision ~= 'ns' then
+    if config.timestamp_precision and config.timestamp_precision ~= 'ns' then
         ts = field_util.message_timestamp(config.timestamp_precision)
     else
         ts = read_message('Timestamp')
@@ -319,18 +293,19 @@ function influxdb_line_msg(config)
 
     -- @mo Format the line differently based on the presence of tags and fields
     -- both fields and tags are present
-    local api_message = ""
-    -- TODO: @mo sort tags since influx like that for performance
+    -- TODO: @mo sort tags since influx like that for performance.
+    -- TODO: @n verify current sorting approach (A-Za-z). case insensitivity depends on locale... http://lua-users.org/lists/lua-l/2009-12/msg00658.html
     if tags and #tags > 0 and fields and #fields > 0 then
-        api_message = string.format("%s,%s %s %d", escape_string(name), table.concat(tags, ","),
+        return string.format("%s,%s %s %d", escape_string(name), table.concat(tags, ","),
                                      table.concat(fields, ","), ts)
     -- only fields, no tags. at least one field is required by the line protocol
     elseif fields and #fields > 0 then
-        api_message = string.format("%s %s %d", escape_string(name), table.concat(fields, ","),
+        return string.format("%s %s %d", escape_string(name), table.concat(fields, ","),
                                      ts)
+    else
+        debug("ERROR: No fields found")
+		return nil
     end
-
-    return api_message
 end
 
 function set_config(client_config)
@@ -367,10 +342,10 @@ end
 local config
 function configure()
     local filter_config = {
-        --name = read_config("name") or nil,
-		series_field = read_config("series_field"),
-        value_field = read_config("value_field"),
-        dimensions_field = read_config("dimensions_field"),
+		series_field = read_config("series_field") or error("series_field must be specified"),
+        value_field = read_config("value_field") or error("value_field must be specified"),
+        dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
+        default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
 
         decimal_precision = read_config("decimal_precision") or "6",
         skip_fields_str = read_config("skip_fields") or nil,
@@ -413,7 +388,7 @@ function flush()
     if #api_messages > 0 then
         local output = ""
         for k,v in pairs(api_messages) do
-        output = output..v.."\n"
+	        output = output..v.."\n"
         end
         inject_payload("txt", config.payload_name, output)
         api_messages = {}
