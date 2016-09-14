@@ -56,9 +56,6 @@ Config:
     Field name, which contains a string. The value of this field will be used
     as the `metric` name in SignalFX.
 
-- ticker_interval (int, optional, defaults to never sending a ticker event)
-    Max time delay before a batch is flushed from the filter.
-
 - timestamp_precision (string, optional, default "ms")
     Specify the timestamp precision that you want the event sent with.  The
     default is to use milliseconds by dividing the Heka message timestamp
@@ -66,62 +63,60 @@ Config:
     values supported by the InfluxDB write API (ms, s, m, h). Other precisions
     supported by InfluxDB of n and u are not yet supported.
 
-*Example Heka Configuration*
-- value_field (string, required)
-    The `fieldname` to use as the value for the metric in signalfx. If the `value`
-    field is not present this encoder will set one as the value for counters: `1`.
-    A value of `0` will be used for `gauges`.
-
 
 *Example Heka Configuration*
 
 .. code-block:: ini
 
-    [KayveeInfluxdblineBatchFilter]
+    [KayveeInfluxdbLineBatchFilter]
     message_matcher = "TRUE"
     type = "SandboxFilter"
     script_type = "lua"
     filename = "lua/filters/kayvee_signalfxbatch_messsage.lua"
+    can_exit = false
+    ticker_interval = 60
 
-        [KayveeInfluxdblineBatchFilter.config]
+        [KayveeInfluxdbLineBatchFilter.config]
         series_field="series_f"
         value_field="value_f"
         stat_type_field="stat_type_f"
         dimensions_field="dimensions_f"
         default_dimensions="Hostname"
         max_count = 1000
-        ticker_interval = 60
 
-    [InfluxdbOutput]
-    type = "HttpOutput"
+    [InfluxdbLineOutput]
     message_matcher = "Fields[payload_name] == 'influxdblinebatch'"
     encoder = "PayloadEncoder"
-    address = "http://influxdbserver.example.com:8086/write?db=mydb&rp=mypolicy&precision=s"
-    username = ["%ENV[INFLUXDB_USERNAME]"]
-    password = ["%ENV[INFLUXDB_PASSWORD]"]
-
+    type = "HttpOutput"
+    address = "%ENV[INFLUXDB_LINE_PROTO]://%ENV[INFLUXDB_LINE_HOST]:%ENV[INFLUXDB_LINE_PORT]/write?db=%ENV[INFLUXDB_LINE_DB]&precision=ms"
+    username = "%ENV[INFLUXDB_LINE_USER]"
+    password = "%ENV[INFLUXDB_LINE_PASS]"
+    http_timeout = 60000
 --]=]
 
-local interp = require "msg_interpolate"
 local field_util = require "field_util"
 
-local string = require "string"
-local table = require "table"
-
-local decode_message = decode_message
-local read_config = read_config
-local read_message = read_message
-
-local ipairs = ipairs
-local pairs = pairs
-local tostring = tostring
-local type = type
-
-------------------------
+--------------------------------
 --
 --  Private Interface
 --
-------------------------
+--------------------------------
+
+local config
+function configure()
+    config = {
+		series_field = read_config("series_field") or error("series_field must be specified"),
+        value_field = read_config("value_field") or error("value_field must be specified"),
+        dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
+        default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
+
+        decimal_precision = read_config("decimal_precision") or "6",
+        timestamp_precision = read_config("timestamp_precision") or "ms",
+        payload_name = read_config("payload_name") or "influxdblinebatch",
+        batch_max_count = read_config("max_count") or 20,
+    }
+end
+configure()
 
 -- TODO: Refactor shared items
 local base_fields_map = {
@@ -282,50 +277,7 @@ function influxdb_line_msg(config)
     end
 end
 
---------------------------------
---
---  End of private functions
---
---------------------------------
-local config
-function configure()
-    config = {
-		series_field = read_config("series_field") or error("series_field must be specified"),
-        value_field = read_config("value_field") or error("value_field must be specified"),
-        dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
-        default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
-
-        decimal_precision = read_config("decimal_precision") or "6",
-        timestamp_precision = read_config("timestamp_precision") or "ms",
-        payload_name = read_config("payload_name") or "influxdblinebatch",
-    }
-end
-configure()
-
-api_messages = {}
-batch_max_count = read_config("max_count") or 20
-
---
--- Public Interface
---
-
-function process_message()
-    api_message = influxdb_line_msg(config, current_batch_count)
-	if not api_message then return -1 end
-
-    -- Batch
-    table.insert(api_messages, api_message)
-
-    if #api_messages == batch_max_count then
-        flush()
-    end
-    return 0
-end
-
-function timer_event(ns)
-    flush()
-end
-
+local api_messages = {}
 function flush()
     if #api_messages > 0 then
         local output = ""
@@ -337,6 +289,25 @@ function flush()
     end
 end
 
+--------------------------------
 --
--- END Public Interface
+--  Public interface
 --
+--------------------------------
+
+function process_message()
+    api_message = influxdb_line_msg(config, current_batch_count)
+	if not api_message then return -1 end
+
+    -- Batch
+    table.insert(api_messages, api_message)
+
+    if #api_messages == config.batch_max_count then
+        flush()
+    end
+    return 0
+end
+
+function timer_event(ns)
+    flush()
+end

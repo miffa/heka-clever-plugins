@@ -46,9 +46,6 @@ Config:
     Field name, which contains a string. The value of this field will be used
     as the `metric` name in SignalFX.
 
-- ticker_interval (int, optional, defaults to never sending a ticker event)
-    Max time delay before a batch is flushed from the filter.
-
 - value_field (string, required)
     The `fieldname` to use as the value for the metric in signalfx. If the `value`
     field is not present this encoder will set one as the value for counters: `1`.
@@ -64,6 +61,7 @@ Config:
     type = "SandboxFilter"
     script_type = "lua"
     filename = "lua/filters/kayvee_signalfxbatch_messsage.lua"
+    ticker_interval = 60
 
         [KayveeSignalfxBatchFilter.config]
         series_field="series_f"
@@ -72,7 +70,6 @@ Config:
         dimensions_field="dimensions_f"
         default_dimensions="Hostname"
         max_count = 1000
-        ticker_interval = 60
 
     [SignalfxHttpOutput]
     message_matcher = "Fields[payload_name] == 'signalfxbatch'"
