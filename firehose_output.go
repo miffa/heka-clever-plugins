@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -66,7 +67,21 @@ func (f *FirehoseOutput) Init(config interface{}) error {
 	f.batchChan = make(chan MsgPack, 100)
 	f.batchedRecords = make([][]byte, 0, f.conf.FlushCount)
 
-	f.client = aws.NewFirehose(f.conf.Region, f.conf.Stream)
+	if f.conf.Stream == "" {
+		return fmt.Errorf("Unspecificed stream name")
+	}
+
+	if os.Getenv("HEKA_TESTING") == "" {
+		f.client = aws.NewFirehose(f.conf.Region, f.conf.Stream)
+	} else {
+		endpoint := os.Getenv("MOCK_FIREHOSE_ENDPOINT")
+		if endpoint == "" {
+			return fmt.Errorf("env-var MOCK_FIREHOSE_ENDPOINT not found for heka-testing")
+		}
+		fmt.Println("Mocking out firehose output: " + endpoint)
+		f.client = aws.NewMockRecordPutter(f.conf.Stream, endpoint)
+	}
+
 	return nil
 }
 
@@ -119,17 +134,8 @@ func (f *FirehoseOutput) parseFields(pack *pipeline.PipelinePack) map[string]int
 
 func (f *FirehoseOutput) ProcessMessage(pack *pipeline.PipelinePack) error {
 	atomic.AddInt64(&f.recvRecordCount, 1)
-	payload := pack.Message.GetPayload()
 	timestamp := time.Unix(0, pack.Message.GetTimestamp()).Format("2006-01-02 15:04:05.000")
-
-	// Verify input is valid json
-	object := make(map[string]interface{})
-	err := json.Unmarshal([]byte(payload), &object)
-	if err != nil {
-		// Since payload is not a json object, parse the entire pack
-		// into a map of fields and dynamic fields
-		object = f.parseFields(pack)
-	}
+	object := f.parseFields(pack)
 
 	if len(object) == 0 {
 		atomic.AddInt64(&f.droppedRecordCount, 1)
@@ -162,15 +168,15 @@ func (f *FirehoseOutput) batchSender() {
 		select {
 		case <-f.stopChan:
 			ok = false
-			continue
-		case pack := <-f.batchChan:
-			f.batchedRecords = append(f.batchedRecords, pack.record)
-			f.queueCursor = pack.queueCursor
-			if len(f.batchedRecords) >= f.conf.FlushCount {
-				f.sendBatch()
-			}
+			f.sendBatch()
 		case <-f.flushTicker.C:
-			if len(f.batchedRecords) > 0 {
+			f.sendBatch()
+		case pack := <-f.batchChan:
+			if len(pack.record) > 0 {
+				f.batchedRecords = append(f.batchedRecords, pack.record)
+				f.queueCursor = pack.queueCursor
+			}
+			if len(f.batchedRecords) >= f.conf.FlushCount {
 				f.sendBatch()
 			}
 		}
@@ -181,6 +187,10 @@ func (f *FirehoseOutput) batchSender() {
 // the timer has expired
 func (f *FirehoseOutput) sendBatch() {
 	count := int64(len(f.batchedRecords))
+	if count <= 0 {
+		return
+	}
+
 	err := f.client.PutRecordBatch(f.batchedRecords)
 
 	// Update the cursor (these messages are either lost forever or sent)
