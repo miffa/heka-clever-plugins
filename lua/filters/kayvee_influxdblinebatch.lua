@@ -102,7 +102,7 @@ local field_util = require "field_util"
 --
 --------------------------------
 
-config = {
+local config = {
     series_field = read_config("series_field") or error("series_field must be specified"),
     value_field = read_config("value_field") or error("value_field must be specified"),
     dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
@@ -157,11 +157,11 @@ local function get_dimensions(s)
     return dims
 end
 
-function escape_string(str)
+local function escape_string(str)
     return tostring(str):gsub("([ ,])", "\\%1")
 end
 
-function encode_scalar_value(value, decimal_precision)
+local function encode_scalar_value(value, decimal_precision)
     if type(value) == "number" then
         -- Always send numbers as formatted floats, so InfluxDB will accept
         -- them if they happen to change from ints to floats between
@@ -178,14 +178,16 @@ function encode_scalar_value(value, decimal_precision)
     end
 end
 
-function sorted_keys(map)
+local function sorted_keys(map)
+    -- TODO: @n Do full alpha sorting instead of (A-Za-z). case sensitive currently.
+    --      depends on locale... http://lua-users.org/lists/lua-l/2009-12/msg00658.html
     sorted = {}
     for key in pairs(map) do table.insert(sorted, key) end
     table.sort(sorted)
     return sorted
 end
 
-function encode_fields(fields, decimal_precision)
+local function encode_fields(fields, decimal_precision)
     local values = {}
     if fields == nil then return values end
 
@@ -200,7 +202,7 @@ function encode_fields(fields, decimal_precision)
     return values
 end
 
-function encode_tags(value)
+local function encode_tags(value)
     local values = {}
     if value == nil then return values end
 
@@ -245,7 +247,7 @@ local function tags_fields_tables(config)
     return encode_fields(fields, config.decimal_precision), encode_tags(tags)
 end
 
-function influxdb_line_msg(config)
+local function influxdb_line_msg(config)
     -- reduce timestamp precision if it's not heka default of ns
     local ts
     if config.timestamp_precision and config.timestamp_precision ~= 'ns' then
@@ -258,18 +260,12 @@ function influxdb_line_msg(config)
     if not series then return nil end
 
     local fields, tags = tags_fields_tables(config)
+    if not fields or #fields == 0 then return nil end
 
-    -- TODO: @n Do full alpha sorting instead of (A-Za-z). case sensitive currently.
-    --      depends on locale... http://lua-users.org/lists/lua-l/2009-12/msg00658.html
-    if tags and #tags > 0 and fields and #fields > 0 then
-        return string.format("%s,%s %s %d", escape_string(series), table.concat(tags, ","),
-                                     table.concat(fields, ","), ts)
-    -- only fields, no tags. at least one field is required by the line protocol
-    elseif fields and #fields > 0 then
-        return string.format("%s %s %d", escape_string(series), table.concat(fields, ","),
-                                     ts)
+    if tags and #tags > 0 then
+        return string.format("%s,%s %s %d", escape_string(series), table.concat(tags, ","), table.concat(fields, ","), ts)
     else
-        return nil
+        return string.format("%s %s %d", escape_string(series), table.concat(fields, ","), ts)
     end
 end
 
@@ -277,7 +273,7 @@ local api_messages = {}
 function flush()
     if #api_messages > 0 then
         local output = ""
-        for k,v in pairs(api_messages) do
+        for _,v in pairs(api_messages) do
             output = output..v.."\n"
         end
         inject_payload("txt", config.payload_name, output)
