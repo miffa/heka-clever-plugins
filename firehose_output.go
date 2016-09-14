@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -70,7 +71,16 @@ func (f *FirehoseOutput) Init(config interface{}) error {
 		return fmt.Errorf("Unspecificed stream name")
 	}
 
-	f.client = aws.NewFirehose(f.conf.Region, f.conf.Stream)
+	if os.Getenv("HEKA_TESTING") == "" {
+		f.client = aws.NewFirehose(f.conf.Region, f.conf.Stream)
+	} else {
+		endpoint := os.Getenv("MOCK_FIREHOSE_ENDPOINT")
+		if endpoint == "" {
+			return fmt.Errorf("env-var MOCK_FIREHOSE_ENDPOINT not found for heka-testing")
+		}
+		fmt.Println("Mocking out firehose output: " + endpoint)
+		f.client = aws.NewMockRecordPutter(f.conf.Stream, endpoint)
+	}
 
 	return nil
 }
