@@ -1,18 +1,42 @@
--- This Source Code Form is subject to the terms of the Mozilla Public
--- License, v. 2.0. If a copy of the MPL was not distributed with this
--- file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 --[=[
+
 Converts full Heka message contents to line protocol for InfluxDB HTTP write API
 (new in InfluxDB v0.9.0). This filter converts each Heka message into one InfluxDB
 line and seperates multiple lines with `\n`. The `name` is re-evaluated for each line.
 
-.. note::
-    This encoder is intended for use with InfluxDB versions 0.9 or greater. If
-    you're working with InfluxDB versions prior to 0.9, you'll want to use the
-    :ref:`config_schema_influx_encoder` instead.
+Generates batches suitable for send to InfluxDB API.
+
+Batches multiple messages into one string, which can be passed to an HttpOutput
+using a PayloadEncoder.
+
+This filter differs from the previous InfluxDBLineBatch filter in that it pulls metadata
+such as the series name, tags list, and more from the message itself.
+This works in conjuction with Kayvee, which injects routing information into the message.
 
 Config:
+
+- dimensions_field (string, required)
+    Field name from the message. The field should contain a space delimited list of
+    field names. Each of these will be written as "dimensions" on the SignalFx data
+    point, which you can filter by in SignalFx.
+
+    For example, if the received message had a value of `field_a field_b", and
+    corresponding fields `field_a: a` and `field_b: b`, then dimensions would look
+    like:
+
+        "dimensions": {
+            "field_a": "a",
+            "field_b": "b"
+        }
+
+    These dimensions may NOT be Heka internal fields.
+
+- default_dimensions (string, optional)
+    A space delimited list of field names. Each of these will be written as
+    "dimensions" on the SignalFx data point, in addition to the fields set via
+    `dimensions_field`.
+
+    These dimensions may be Heka internal fields.
 
 - decimal_precision (string, optional, default "6")
     String that is used in the string.format function to define the number
@@ -22,37 +46,18 @@ Config:
     forcing all numbers to floats, we ensure that InfluxDB will always
     accept our numerical values, regardless of the initial format.
 
-- name (string, required)
-    String to use as the metric `name` in the generated line.
-    Supports :ref:`message field interpolation<sandbox_msg_interpolate_module>`.
-    `%{fieldname}`. Any `fieldname` values of "Type", "Payload", "Hostname",
-    "Pid", "Logger", "Severity", or "EnvVersion" will be extracted from the
-    the base message schema, any other values will be assumed to refer to a
-    dynamic message field. Only the first value of the first instance of a
-    dynamic message field can be used for name name interpolation. If the
-    dynamic field doesn't exist, the uninterpolated value will be left in the
-    name. Note that it is not possible to interpolate either the
-    "Timestamp" or the "Uuid" message fields into the name, those
-    values will be interpreted as referring to dynamic message fields.
+- msg_type (string, optional, defaults to "signalfxbatch")
+    `Type` of the message outputted from this filter.
 
-- skip_fields (string, optional, default nil)
-    Space delimited set of fields that should *not* be included as `fields` for
-    InfluxDB measurements being generated. Any `fieldname` values of "Type",
-    "Payload", "Hostname", "Pid", "Logger", "Severity", or "EnvVersion" will
-    be assumed to refer to the corresponding field from the base message
-    schema. Any other values will be assumed to refer to a dynamic message
-    field. The magic value "**all_base**" can be used to exclude base fields
-    from being mapped to the event altogether. Does not interact with `tag_fields`.
+- max_count (int, optional, defaults to 20)
+    Max number of messages before a batch is flushed from the filter.
 
-- tag_fields (string, optional, default "**all_base**")
-    Take fields defined and add them as tags of the measurement(s) sent to
-    InfluxDB for the message.  The magic values "**all**" and "**all_base**"
-    are used to map all fields (including taggable base fields) to tags and only
-    base fields to tags, respectively.  If those magic values aren't used,
-    then only those fields defined will map to tags of the measurement sent
-    to InfluxDB. The tag_fields values are independent of the skip_fields
-    values and have no affect on each other.  You can skip fields from being
-    sent to InfluxDB as measurements, but still include them as tags.
+- series_field (string, required)
+    Field name, which contains a string. The value of this field will be used
+    as the `metric` name in SignalFX.
+
+- ticker_interval (int, optional, defaults to never sending a ticker event)
+    Max time delay before a batch is flushed from the filter.
 
 - timestamp_precision (string, optional, default "ms")
     Specify the timestamp precision that you want the event sent with.  The
@@ -62,55 +67,38 @@ Config:
     supported by InfluxDB of n and u are not yet supported.
 
 *Example Heka Configuration*
+- value_field (string, required)
+    The `fieldname` to use as the value for the metric in signalfx. If the `value`
+    field is not present this encoder will set one as the value for counters: `1`.
+    A value of `0` will be used for `gauges`.
+
+
+*Example Heka Configuration*
 
 .. code-block:: ini
 
-    [LoadAvgPoller]
-    type = "FilePollingInput"
-    ticker_interval = 5
-    file_path = "/proc/loadavg"
-    decoder = "LinuxStatsDecoder"
+    [KayveeInfluxdblineBatchFilter]
+    message_matcher = "TRUE"
+    type = "SandboxFilter"
+    script_type = "lua"
+    filename = "lua/filters/kayvee_signalfxbatch_messsage.lua"
 
-    [LoadAvgDecoder]
-    type = "SandboxDecoder"
-    filename = "lua_decoders/linux_loadavg.lua"
-
-    [LinuxStatsDecoder]
-    type = "MultiDecoder"
-    subs = ["LoadAvgDecoder", "AddStaticFields"]
-    cascade_strategy = "all"
-    log_sub_errors = false
-
-    [AddStaticFields]
-    type = "ScribbleDecoder"
-
-        [AddStaticFields.message_fields]
-        Environment = "dev"
-
-    [InfluxdbLineEncoder]
-    type = "SandboxEncoder"
-    filename = "lua_encoders/schema_influx_line.lua"
-
-        [InfluxdbLineEncoder.config]
-        skip_fields = "**all_base** FilePath NumProcesses Environment TickerInterval"
-        tag_fields = "Hostname Environment"
-        timestamp_precision= "s"
+        [KayveeInfluxdblineBatchFilter.config]
+        series_field="series_f"
+        value_field="value_f"
+        stat_type_field="stat_type_f"
+        dimensions_field="dimensions_f"
+        default_dimensions="Hostname"
+        max_count = 1000
+        ticker_interval = 60
 
     [InfluxdbOutput]
     type = "HttpOutput"
-    message_matcher = "Type =~ /stats.*/"
-    encoder = "InfluxdbLineEncoder"
+    message_matcher = "Fields[payload_name] == 'influxdblinebatch'"
+    encoder = "PayloadEncoder"
     address = "http://influxdbserver.example.com:8086/write?db=mydb&rp=mypolicy&precision=s"
-    username = "influx_username"
-    password = "influx_password"
-
-*Example Output*
-
-.. code-block:: none
-
-    5MinAvg,Hostname=myhost,Environment=dev value=0.110000 1434932024
-    1MinAvg,Hostname=myhost,Environment=dev value=0.110000 1434932024
-    15MinAvg,Hostname=myhost,Environment=dev value=0.170000 1434932024
+    username = ["%ENV[INFLUXDB_USERNAME]"]
+    password = ["%ENV[INFLUXDB_PASSWORD]"]
 
 --]=]
 
@@ -287,51 +275,22 @@ function influxdb_line_msg(config)
 
     local series = lookup_field_then_value(config.series_field)
     if not series then return nil end
-	name = series
 
     local fields, tags = tags_fields_tables(config)
 
-    -- @mo Format the line differently based on the presence of tags and fields
-    -- both fields and tags are present
-    -- TODO: @mo sort tags since influx like that for performance.
-    -- TODO: @n verify current sorting approach (A-Za-z). case insensitivity depends on locale... http://lua-users.org/lists/lua-l/2009-12/msg00658.html
+    -- TODO: @n Do full alpha sorting instead of (A-Za-z). case sensitive currently.
+    --      depends on locale... http://lua-users.org/lists/lua-l/2009-12/msg00658.html
     if tags and #tags > 0 and fields and #fields > 0 then
-        return string.format("%s,%s %s %d", escape_string(name), table.concat(tags, ","),
+        return string.format("%s,%s %s %d", escape_string(series), table.concat(tags, ","),
                                      table.concat(fields, ","), ts)
     -- only fields, no tags. at least one field is required by the line protocol
     elseif fields and #fields > 0 then
-        return string.format("%s %s %d", escape_string(name), table.concat(fields, ","),
+        return string.format("%s %s %d", escape_string(series), table.concat(fields, ","),
                                      ts)
     else
         debug("ERROR: No fields found")
 		return nil
     end
-end
-
-function set_config(client_config)
-    local module_config = client_config
-    -- Remove blacklisted fields from the set of base fields that we use, and
-    -- create a table of dynamic fields to skip.
-    if module_config.skip_fields_str then
-        module_config.skip_fields,
-        module_config.skip_fields_all_base = field_util.field_map(client_config.skip_fields_str)
-        module_config.used_base_fields = field_util.used_base_fields(module_config.skip_fields)
-    end
-
-    -- Create and populate a table of fields to be used as tags
-    if module_config.tag_fields_str then
-        module_config.used_tag_fields,
-        module_config.tag_fields_all_base,
-        module_config.tag_fields_all = field_util.field_map(client_config.tag_fields_str)
-    end
-
-    -- Cache whether or not name needs interpolation
-    module_config.interp_name = false
-    if module_config.name and string.find(module_config.name, "%%{[%w%p]-}") then
-        module_config.interp_name = true
-    end
-
-    return module_config
 end
 
 --------------------------------
@@ -341,19 +300,16 @@ end
 --------------------------------
 local config
 function configure()
-    local filter_config = {
+    config = {
 		series_field = read_config("series_field") or error("series_field must be specified"),
         value_field = read_config("value_field") or error("value_field must be specified"),
         dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
         default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
 
         decimal_precision = read_config("decimal_precision") or "6",
-        skip_fields_str = read_config("skip_fields") or nil,
-        tag_fields_str = read_config("tag_fields") or "**all_base**",
         timestamp_precision = read_config("timestamp_precision") or "ms",
         payload_name = read_config("payload_name") or "influxdblinebatch",
     }
-    config = set_config(filter_config)
 end
 configure()
 
@@ -365,22 +321,19 @@ batch_max_count = read_config("max_count") or 20
 --
 
 function process_message()
-    -- Inject a new message with the payload populated with the newline
-    -- delimited data points, and append a newline at the end for the last line
     api_message = influxdb_line_msg(config, current_batch_count)
 	if not api_message then return -1 end
 
+    -- Batch
     table.insert(api_messages, api_message)
+
     if #api_messages == batch_max_count then
         flush()
     end
-
     return 0
 end
 
 function timer_event(ns)
-    -- details of the lua sandbox guarantee that this timer
-    -- does not get called in the middle of a process_message call
     flush()
 end
 
