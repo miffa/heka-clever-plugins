@@ -102,11 +102,6 @@ Config:
 
 --]=]
 
--- TODO: remove util and import ... for debugging only
--- Allow importing from parent directory
-package.path = package.path .. ";../?.lua"
-local util = require 'util'
-
 local interp = require "msg_interpolate"
 local field_util = require "field_util"
 
@@ -127,11 +122,6 @@ local type = type
 --  Private Interface
 --
 ------------------------
-
-local function debug(msg)
-	-- TODO: Disable if debug not on
-	print("[DEBUG] " .. tostring(msg))
-end
 
 -- TODO: Refactor shared items
 local base_fields_map = {
@@ -288,7 +278,6 @@ function influxdb_line_msg(config)
         return string.format("%s %s %d", escape_string(series), table.concat(fields, ","),
                                      ts)
     else
-        debug("ERROR: No fields found")
 		return nil
     end
 end
