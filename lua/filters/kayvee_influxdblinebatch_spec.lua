@@ -42,8 +42,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
     function test_setup()
         mocks.reset()
         mocks.set_config(mock_cfg)
-        require 'kayvee_influxdblinebatch'  -- TODO: does this happen only once? or will it call configure() each time?
-        configure()
+        require 'kayvee_influxdblinebatch'
         mocks.set_next_message(mock_msg)
     end
 

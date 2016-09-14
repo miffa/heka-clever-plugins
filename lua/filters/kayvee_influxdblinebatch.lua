@@ -102,21 +102,17 @@ local field_util = require "field_util"
 --
 --------------------------------
 
-local config
-function configure()
-    config = {
-        series_field = read_config("series_field") or error("series_field must be specified"),
-        value_field = read_config("value_field") or error("value_field must be specified"),
-        dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
-        default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
+config = {
+    series_field = read_config("series_field") or error("series_field must be specified"),
+    value_field = read_config("value_field") or error("value_field must be specified"),
+    dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
+    default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
 
-        decimal_precision = read_config("decimal_precision") or "6",
-        timestamp_precision = read_config("timestamp_precision") or "ms",
-        payload_name = read_config("payload_name") or "influxdblinebatch",
-        batch_max_count = read_config("max_count") or 20,
-    }
-end
-configure()
+    decimal_precision = read_config("decimal_precision") or "6",
+    timestamp_precision = read_config("timestamp_precision") or "ms",
+    payload_name = read_config("payload_name") or "influxdblinebatch",
+    batch_max_count = read_config("max_count") or 20,
+}
 
 -- TODO: Refactor shared items
 local base_fields_map = {
