@@ -125,7 +125,7 @@ local base_fields_map = {
 -- Routes to appropriate lookup for Heka internal fields (see `base_fields_map`)
 -- or custom message fields.
 local function read_field(key)
-	if not key then return nil end
+    if not key then return nil end
 
     if base_fields_map[key] then
         return read_message(key)
@@ -135,7 +135,7 @@ local function read_field(key)
 end
 
 local function lookup_field_then_value(key)
-	if not key then return nil end
+    if not key then return nil end
 
     -- Get field name
     local field_name = read_message("Fields["..key.."]")
