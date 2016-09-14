@@ -17,8 +17,8 @@ Config:
 
 - dimensions_field (string, required)
     Field name from the message. The field should contain a space delimited list of
-    field names. Each of these will be written as "dimensions" on the SignalFx data
-    point, which you can filter by in SignalFx.
+    field names. Each of these will be written as "tags" on the InfluxDB data
+    point, which you can filter by in InfluxDB.
 
     For example, if the received message had a value of `field_a field_b", and
     corresponding fields `field_a: a` and `field_b: b`, then dimensions would look
@@ -33,7 +33,7 @@ Config:
 
 - default_dimensions (string, optional)
     A space delimited list of field names. Each of these will be written as
-    "dimensions" on the SignalFx data point, in addition to the fields set via
+    tags on the InfluxDB data point, in addition to the fields set via
     `dimensions_field`.
 
     These dimensions may be Heka internal fields.
@@ -46,7 +46,7 @@ Config:
     forcing all numbers to floats, we ensure that InfluxDB will always
     accept our numerical values, regardless of the initial format.
 
-- msg_type (string, optional, defaults to "signalfxbatch")
+- msg_type (string, optional, defaults to "influxdbbatch")
     `Type` of the message outputted from this filter.
 
 - max_count (int, optional, defaults to 20)
@@ -54,7 +54,7 @@ Config:
 
 - series_field (string, required)
     Field name, which contains a string. The value of this field will be used
-    as the `metric` name in SignalFX.
+    as the `series` name in InfluxDB.
 
 - timestamp_precision (string, optional, default "ms")
     Specify the timestamp precision that you want the event sent with.  The
@@ -72,7 +72,7 @@ Config:
     message_matcher = "TRUE"
     type = "SandboxFilter"
     script_type = "lua"
-    filename = "lua/filters/kayvee_signalfxbatch_messsage.lua"
+    filename = "lua/filters/kayvee_influxdblinebatch.lua"
     can_exit = false
     ticker_interval = 60
 
