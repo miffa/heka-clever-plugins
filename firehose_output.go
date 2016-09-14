@@ -178,14 +178,14 @@ func (f *FirehoseOutput) batchSender() {
 		case <-f.stopChan:
 			ok = false
 			continue
-		case pack := <-f.batchChan:
-			f.batchedRecords = append(f.batchedRecords, pack.record)
-			f.queueCursor = pack.queueCursor
-			if len(f.batchedRecords) >= f.conf.FlushCount {
-				f.sendBatch()
-			}
 		case <-f.flushTicker.C:
-			if len(f.batchedRecords) > 0 {
+			f.sendBatch()
+		case pack := <-f.batchChan:
+			if len(pack.record) > 0 {
+				f.batchedRecords = append(f.batchedRecords, pack.record)
+				f.queueCursor = pack.queueCursor
+			}
+			if len(f.batchedRecords) >= f.conf.FlushCount {
 				f.sendBatch()
 			}
 		}
@@ -196,6 +196,10 @@ func (f *FirehoseOutput) batchSender() {
 // the timer has expired
 func (f *FirehoseOutput) sendBatch() {
 	count := int64(len(f.batchedRecords))
+	if count <= 0 {
+		return
+	}
+
 	err := f.client.PutRecordBatch(f.batchedRecords)
 
 	// Update the cursor (these messages are either lost forever or sent)
