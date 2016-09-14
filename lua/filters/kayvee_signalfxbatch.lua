@@ -46,9 +46,6 @@ Config:
     Field name, which contains a string. The value of this field will be used
     as the `metric` name in SignalFX.
 
-- ticker_interval (int, optional, defaults to never sending a ticker event)
-    Max time delay before a batch is flushed from the filter.
-
 - value_field (string, required)
     The `fieldname` to use as the value for the metric in signalfx. If the `value`
     field is not present this encoder will set one as the value for counters: `1`.
@@ -64,6 +61,7 @@ Config:
     type = "SandboxFilter"
     script_type = "lua"
     filename = "lua/filters/kayvee_signalfxbatch_messsage.lua"
+    ticker_interval = 60
 
         [KayveeSignalfxBatchFilter.config]
         series_field="series_f"
@@ -72,7 +70,6 @@ Config:
         dimensions_field="dimensions_f"
         default_dimensions="Hostname"
         max_count = 1000
-        ticker_interval = 60
 
     [SignalfxHttpOutput]
     message_matcher = "Fields[payload_name] == 'signalfxbatch'"
@@ -128,6 +125,8 @@ local base_fields_map = {
 -- Routes to appropriate lookup for Heka internal fields (see `base_fields_map`)
 -- or custom message fields.
 local function read_field(key)
+    if not key then return nil end
+
     if base_fields_map[key] then
         return read_message(key)
     else
@@ -136,6 +135,8 @@ local function read_field(key)
 end
 
 local function lookup_field_then_value(key)
+    if not key then return nil end
+
     -- Get field name
     local field_name = read_message("Fields["..key.."]")
     if not field_name or field_name == "" then return nil end
