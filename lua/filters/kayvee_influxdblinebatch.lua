@@ -105,7 +105,7 @@ local field_util = require "field_util"
 local config
 function configure()
     config = {
-		series_field = read_config("series_field") or error("series_field must be specified"),
+        series_field = read_config("series_field") or error("series_field must be specified"),
         value_field = read_config("value_field") or error("value_field must be specified"),
         dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
         default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
@@ -133,7 +133,7 @@ local base_fields_map = {
 -- Routes to appropriate lookup for Heka internal fields (see `base_fields_map`)
 -- or custom message fields.
 local function read_field(key)
-	if not key then return nil end
+    if not key then return nil end
 
     if base_fields_map[key] then
         return read_message(key)
@@ -143,7 +143,7 @@ local function read_field(key)
 end
 
 local function lookup_field_then_value(key)
-	if not key then return nil end
+    if not key then return nil end
 
     -- Get field name
     local field_name = read_message("Fields["..key.."]")
@@ -183,33 +183,33 @@ function encode_scalar_value(value, decimal_precision)
 end
 
 function sorted_keys(map)
-	sorted = {}
+    sorted = {}
     for key in pairs(map) do table.insert(sorted, key) end
     table.sort(sorted)
-	return sorted
+    return sorted
 end
 
 function encode_fields(fields, decimal_precision)
-	local values = {}
-	if fields == nil then return values end
+    local values = {}
+    if fields == nil then return values end
 
     for _,k in ipairs(sorted_keys(fields)) do
-		v = fields[k]
-		table.insert(
-			values,
-			string.format("%s=%s", escape_string(k), encode_scalar_value(v, decimal_precision))
-		)
-	end
+        v = fields[k]
+        table.insert(
+            values,
+            string.format("%s=%s", escape_string(k), encode_scalar_value(v, decimal_precision))
+        )
+    end
 
-	return values
+    return values
 end
 
 function encode_tags(value)
     local values = {}
-	if value == nil then return values end
+    if value == nil then return values end
 
     for _,k in ipairs(sorted_keys(value)) do
-		v = value[k]
+        v = value[k]
         table.insert(
             values,
             string.format("%s=%s",
@@ -227,24 +227,24 @@ local function tags_fields_tables(config)
     -- Get value
     local value = lookup_field_then_value(config.value_field)
     if not value then return nil end
-	fields = { value = value }
+    fields = { value = value }
 
     -- TAGS
     local tags = {}
 
     -- Get custom dimensions
-	local dimensions_str = lookup_field_then_value(config.dimensions_field)
-	if not dimensions_str then return nil end
-	local dims = get_dimensions(dimensions_str)
-	for k, v in pairs(dims) do
-		tags[k] = v
-	end
+    local dimensions_str = lookup_field_then_value(config.dimensions_field)
+    if not dimensions_str then return nil end
+    local dims = get_dimensions(dimensions_str)
+    for k, v in pairs(dims) do
+        tags[k] = v
+    end
 
-	-- Read default dimensions from message
-	local default_dims = get_dimensions(config.default_dimensions)
-	for k, v in pairs(default_dims) do
-		tags[k] = v
-	end
+    -- Read default dimensions from message
+    local default_dims = get_dimensions(config.default_dimensions)
+    for k, v in pairs(default_dims) do
+        tags[k] = v
+    end
 
     return encode_fields(fields, config.decimal_precision), encode_tags(tags)
 end
@@ -273,7 +273,7 @@ function influxdb_line_msg(config)
         return string.format("%s %s %d", escape_string(series), table.concat(fields, ","),
                                      ts)
     else
-		return nil
+        return nil
     end
 end
 
@@ -282,7 +282,7 @@ function flush()
     if #api_messages > 0 then
         local output = ""
         for k,v in pairs(api_messages) do
-	        output = output..v.."\n"
+            output = output..v.."\n"
         end
         inject_payload("txt", config.payload_name, output)
         api_messages = {}
@@ -297,7 +297,7 @@ end
 
 function process_message()
     api_message = influxdb_line_msg(config, current_batch_count)
-	if not api_message then return -1 end
+    if not api_message then return -1 end
 
     -- Batch
     table.insert(api_messages, api_message)
