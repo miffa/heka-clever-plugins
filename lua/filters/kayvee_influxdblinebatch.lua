@@ -102,6 +102,7 @@ local field_util = require "field_util"
 --
 --------------------------------
 
+-- Configuration
 local config = {
     series_field = read_config("series_field") or error("series_field must be specified"),
     value_field = read_config("value_field") or error("value_field must be specified"),
@@ -114,7 +115,10 @@ local config = {
     batch_max_count = read_config("max_count") or 20,
 }
 
--- TODO: Refactor shared items
+-- Keeps track of api_messages, for batching
+local api_messages = {}
+
+-- Heka base fields, vs user-specified fields
 local base_fields_map = {
     Type = true,
     Payload = true,
@@ -125,9 +129,7 @@ local base_fields_map = {
     EnvVersion = true
 }
 
--- read_field gets the value for a field.
--- Routes to appropriate lookup for Heka internal fields (see `base_fields_map`)
--- or custom message fields.
+-- Gets a field's value. Works for Heka base fields and user-specified fields.
 local function read_field(key)
     if not key then return nil end
 
@@ -267,7 +269,6 @@ local function influxdb_line_msg(config)
     end
 end
 
-local api_messages = {}
 function flush()
     if #api_messages > 0 then
         local output = ""
