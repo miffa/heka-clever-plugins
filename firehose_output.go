@@ -66,7 +66,12 @@ func (f *FirehoseOutput) Init(config interface{}) error {
 	f.batchChan = make(chan MsgPack, 100)
 	f.batchedRecords = make([][]byte, 0, f.conf.FlushCount)
 
+	if f.conf.Stream == "" {
+		return fmt.Errorf("Unspecificed stream name")
+	}
+
 	f.client = aws.NewFirehose(f.conf.Region, f.conf.Stream)
+
 	return nil
 }
 
