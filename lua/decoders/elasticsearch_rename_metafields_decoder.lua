@@ -9,19 +9,19 @@ https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-fields.h
 require "string"
 
 local field_renames = {
-    _index = "kv._index",
-    _uid = "kv._uid",
-    _type = "kv._type",
-    _id = "kv._id",
-    _source = "kv._source",
-    _size = "kv._size",
-    _all = "kv._all",
-    _field_names = "kv._field_names",
-    _timestamp = "kv._timestamp",
-    _ttl = "kv._ttl",
-    _parent = "kv._parent",
-    _routing = "kv._routing",
-    _meta = "kv._meta"
+    _index = "kv__index",
+    _uid = "kv__uid",
+    _type = "kv__type",
+    _id = "kv__id",
+    _source = "kv__source",
+    _size = "kv__size",
+    _all = "kv__all",
+    _field_names = "kv__field_names",
+    _timestamp = "kv__timestamp",
+    _ttl = "kv__ttl",
+    _parent = "kv__parent",
+    _routing = "kv__routing",
+    _meta = "kv__meta"
 }
 
 function process_message()
