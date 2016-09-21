@@ -1,13 +1,14 @@
 package batcher
 
 import (
+	"fmt"
 	"time"
 )
 
-type message []byte
+type Message []byte
 
 type Sync interface {
-	Flush(batch []message)
+	Flush(batch []Message, metadata []interface{})
 }
 
 type Batcher interface {
@@ -22,7 +23,7 @@ type Batcher interface {
 	FlushSize(size int)
 
 	// Messages for length 0 are ignored
-	SendMessage(msg message)
+	Send(msg Message, metadata interface{}) error
 	Flush()
 }
 
@@ -32,12 +33,17 @@ type batcher struct {
 	flushSize     int
 
 	sync      Sync
-	msgChan   chan<- message
+	msgChan   chan<- messagePack
 	flushChan chan<- struct{}
 }
 
+type messagePack struct {
+	msg      Message
+	metadata interface{}
+}
+
 func New(sync Sync) *batcher {
-	msgChan := make(chan message)
+	msgChan := make(chan messagePack, 100)
 	flushChan := make(chan struct{})
 
 	b := &batcher{
@@ -67,17 +73,20 @@ func (b *batcher) FlushSize(size int) {
 	b.flushSize = size
 }
 
-func (b *batcher) SendMessage(msg message) {
-	if len(msg) > 0 {
-		b.msgChan <- msg
+func (b *batcher) Send(msg Message, metadata interface{}) error {
+	if len(msg) <= 0 {
+		return fmt.Errorf("Empty messages can't be sent")
 	}
+
+	b.msgChan <- messagePack{msg, metadata}
+	return nil
 }
 
 func (b *batcher) Flush() {
 	b.flushChan <- struct{}{}
 }
 
-func (b *batcher) batchSize(batch []message) int {
+func (b *batcher) batchSize(batch []Message) int {
 	total := 0
 	for _, msg := range batch {
 		total += len(msg)
@@ -86,31 +95,34 @@ func (b *batcher) batchSize(batch []message) int {
 	return total
 }
 
-func (b *batcher) sendBatch(batch []message) []message {
+func (b *batcher) sendBatch(batch []Message, metadata []interface{}) ([]Message, []interface{}) {
 	if len(batch) > 0 {
-		b.sync.Flush(batch)
+		b.sync.Flush(batch, metadata)
 	}
-	return []message{}
+	return []Message{}, []interface{}{}
 }
 
-func (b *batcher) startBatcher(msgChan <-chan message, flushChan <-chan struct{}) {
-	batch := []message{}
+func (b *batcher) startBatcher(msgChan <-chan messagePack, flushChan <-chan struct{}) {
+	batch := []Message{}
+	metadata := []interface{}{}
 
 	for {
 		select {
 		case <-time.After(b.flushInterval):
-			batch = b.sendBatch(batch)
+			batch, metadata = b.sendBatch(batch, metadata)
 		case <-flushChan:
-			batch = b.sendBatch(batch)
-		case msg := <-msgChan:
+			batch, metadata = b.sendBatch(batch, metadata)
+		case pack := <-msgChan:
 			size := b.batchSize(batch)
-			if b.flushSize < size+len(msg) {
-				batch = b.sendBatch(batch)
+			if b.flushSize < size+len(pack.msg) {
+				batch, metadata = b.sendBatch(batch, metadata)
 			}
 
-			batch = append(batch, msg)
+			batch = append(batch, pack.msg)
+			metadata = append(metadata, pack.metadata)
+
 			if b.flushCount <= len(batch) || b.flushSize <= b.batchSize(batch) {
-				batch = b.sendBatch(batch)
+				batch, metadata = b.sendBatch(batch, metadata)
 			}
 		}
 	}
