@@ -8,21 +8,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type batch [][]byte
+
 type mockSync struct {
 	flushChan chan struct{}
-	batches   [][]Message
+	batches   []batch
 	metadatas [][]interface{}
 }
 
 func NewMockSync() *mockSync {
 	return &mockSync{
 		flushChan: make(chan struct{}, 1),
-		batches:   [][]Message{},
+		batches:   []batch{},
 	}
 }
 
-func (m *mockSync) Flush(batch []Message, metadata []interface{}) {
-	m.batches = append(m.batches, batch)
+func (m *mockSync) Flush(b [][]byte, metadata []interface{}) {
+	m.batches = append(m.batches, batch(b))
 	m.metadatas = append(m.metadatas, metadata)
 	m.flushChan <- struct{}{}
 }
@@ -45,9 +47,9 @@ func TestBatchingByCount(t *testing.T) {
 	batcher.FlushInterval(time.Hour)
 	batcher.FlushCount(2)
 
-	assert.NoError(batcher.Send(Message("hihi"), "meta-hi"))
-	assert.NoError(batcher.Send(Message("heyhey"), "meta-hey"))
-	assert.NoError(batcher.Send(Message("hmmhmm"), "meta-hmm")) // Shouldn't be in first batch
+	assert.NoError(batcher.Send([]byte("hihi"), "meta-hi"))
+	assert.NoError(batcher.Send([]byte("heyhey"), "meta-hey"))
+	assert.NoError(batcher.Send([]byte("hmmhmm"), "meta-hmm")) // Shouldn't be in first batch
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -74,7 +76,7 @@ func TestBatchingByTime(t *testing.T) {
 	batcher.FlushInterval(time.Millisecond)
 	batcher.FlushCount(2000000)
 
-	assert.NoError(batcher.Send(Message("hihi"), "meta-hi"))
+	assert.NoError(batcher.Send([]byte("hihi"), "meta-hi"))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -86,8 +88,8 @@ func TestBatchingByTime(t *testing.T) {
 	assert.Equal("hihi", string(sync.batches[0][0]))
 	assert.Equal("meta-hi", sync.metadatas[0][0].(string))
 
-	assert.NoError(batcher.Send(Message("heyhey"), "meta-hey"))
-	assert.NoError(batcher.Send(Message("yoyo"), "meta-yo"))
+	assert.NoError(batcher.Send([]byte("heyhey"), "meta-hey"))
+	assert.NoError(batcher.Send([]byte("yoyo"), "meta-yo"))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -114,7 +116,7 @@ func TestBatchingBySize(t *testing.T) {
 	batcher.FlushSize(8)
 
 	// Large messages are sent immediately
-	assert.NoError(batcher.Send(Message("hellohello"), "meta-hello"))
+	assert.NoError(batcher.Send([]byte("hellohello"), "meta-hello"))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -127,8 +129,8 @@ func TestBatchingBySize(t *testing.T) {
 	assert.Equal("meta-hello", sync.metadatas[0][0].(string))
 
 	// Batcher tries not to exceed size limit
-	assert.NoError(batcher.Send(Message("heyhey"), "meta-hey"))
-	assert.NoError(batcher.Send(Message("hihi"), "meta-hi"))
+	assert.NoError(batcher.Send([]byte("heyhey"), "meta-hey"))
+	assert.NoError(batcher.Send([]byte("hihi"), "meta-hi"))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -140,7 +142,7 @@ func TestBatchingBySize(t *testing.T) {
 	assert.Equal("heyhey", string(sync.batches[1][0]))
 	assert.Equal("meta-hey", sync.metadatas[1][0].(string))
 
-	assert.NoError(batcher.Send(Message("yoyo"), "meta-yo")) // At this point "hihi" is in the batch
+	assert.NoError(batcher.Send([]byte("yoyo"), "meta-yo")) // At this point "hihi" is in the batch
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.NoError(err)
@@ -154,7 +156,7 @@ func TestBatchingBySize(t *testing.T) {
 	assert.Equal("meta-hi", sync.metadatas[2][0].(string))
 	assert.Equal("meta-yo", sync.metadatas[2][1].(string))
 
-	assert.NoError(batcher.Send(Message("okok"), ""))
+	assert.NoError(batcher.Send([]byte("okok"), ""))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.Error(err)
@@ -169,7 +171,7 @@ func TestFlushing(t *testing.T) {
 	batcher.FlushInterval(time.Hour)
 	batcher.FlushCount(2000000)
 
-	assert.NoError(batcher.Send(Message("hihi"), "meta-hi"))
+	assert.NoError(batcher.Send([]byte("hihi"), "meta-hi"))
 
 	err = sync.waitForFlush(time.Millisecond * 10)
 	assert.Error(err)
@@ -194,6 +196,6 @@ func TestSendingEmpty(t *testing.T) {
 	sync := NewMockSync()
 	batcher := New(sync)
 
-	err = batcher.Send(Message{}, "")
+	err = batcher.Send([]byte{}, "")
 	assert.Error(err)
 }

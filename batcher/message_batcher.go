@@ -5,10 +5,8 @@ import (
 	"time"
 )
 
-type Message []byte
-
 type Sync interface {
-	Flush(batch []Message, metadata []interface{})
+	Flush(batch [][]byte, metadata []interface{})
 }
 
 type Batcher interface {
@@ -23,7 +21,7 @@ type Batcher interface {
 	FlushSize(size int)
 
 	// Messages for length 0 are ignored
-	Send(msg Message, metadata interface{}) error
+	Send(msg []byte, metadata interface{}) error
 	Flush()
 }
 
@@ -38,7 +36,7 @@ type batcher struct {
 }
 
 type messagePack struct {
-	msg      Message
+	msg      []byte
 	metadata interface{}
 }
 
@@ -73,7 +71,7 @@ func (b *batcher) FlushSize(size int) {
 	b.flushSize = size
 }
 
-func (b *batcher) Send(msg Message, metadata interface{}) error {
+func (b *batcher) Send(msg []byte, metadata interface{}) error {
 	if len(msg) <= 0 {
 		return fmt.Errorf("Empty messages can't be sent")
 	}
@@ -86,7 +84,7 @@ func (b *batcher) Flush() {
 	b.flushChan <- struct{}{}
 }
 
-func (b *batcher) batchSize(batch []Message) int {
+func (b *batcher) batchSize(batch [][]byte) int {
 	total := 0
 	for _, msg := range batch {
 		total += len(msg)
@@ -95,15 +93,15 @@ func (b *batcher) batchSize(batch []Message) int {
 	return total
 }
 
-func (b *batcher) sendBatch(batch []Message, metadata []interface{}) ([]Message, []interface{}) {
+func (b *batcher) sendBatch(batch [][]byte, metadata []interface{}) ([][]byte, []interface{}) {
 	if len(batch) > 0 {
 		b.sync.Flush(batch, metadata)
 	}
-	return []Message{}, []interface{}{}
+	return [][]byte{}, []interface{}{}
 }
 
 func (b *batcher) startBatcher(msgChan <-chan messagePack, flushChan <-chan struct{}) {
-	batch := []Message{}
+	batch := [][]byte{}
 	metadata := []interface{}{}
 
 	for {
