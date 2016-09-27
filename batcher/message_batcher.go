@@ -13,10 +13,10 @@ type Batcher interface {
 	// Interval at which accumulated messages should be bulk put to
 	// firehose (default 1 second).
 	FlushInterval(dur time.Duration)
-	// Number of messages that triggers a put to firehose
+	// Number of messages that triggers a push to firehose
 	// default to 10
 	FlushCount(count int)
-	// Number of messages that triggers a put to firehose
+	// Size of batch that triggers a push to firehose
 	// default to 1mb (1024 * 1024)
 	FlushSize(size int)
 

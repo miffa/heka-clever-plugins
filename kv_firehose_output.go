@@ -37,10 +37,10 @@ type KVFirehoseOutputConfig struct {
 	// Interval at which accumulated messages should be bulk put to
 	// firehose, in milliseconds (default 1000, i.e. 1 second).
 	FlushInterval uint32 `toml:"flush_interval"`
-	// Number of messages that triggers a put to firehose
+	// Number of messages that triggers a push to firehose
 	// (default to 1, maximum is 500)
 	FlushCount int `toml:"flush_count"`
-	// Number of messages that triggers a put to firehose
+	// Size of batch that triggers a push to firehose
 	// (default to 1024 * 1024 (1mb))
 	FlushSize int `toml:"flush_size"`
 }
