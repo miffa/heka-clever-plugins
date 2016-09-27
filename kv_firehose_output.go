@@ -32,9 +32,6 @@ type KVFirehoseOutput struct {
 type KVFirehoseOutputConfig struct {
 	// The value of this field is used as the firehose `series` (or stream) name
 	SeriesField string `toml:"series_field"`
-	// Optional. The value of this config is used as the field name to put the timestamp in
-	TimestampColumnField string `toml:"timestamp_column_field"`
-
 	// AWS region the stream lives in
 	Region string `toml:"region"`
 	// Interval at which accumulated messages should be bulk put to
@@ -132,14 +129,17 @@ func (f *KVFirehoseOutput) createBatcherSync(seriesName string) batcher.Sync {
 }
 
 func (f *KVFirehoseOutput) parseFields(pack *pipeline.PipelinePack) (
-	seriesName string, timestampColumn string, object map[string]interface{},
+	seriesName string, object map[string]interface{},
 ) {
 	m := pack.Message
 	object = make(map[string]interface{})
 
+	// Adding the timestamp twice to maintain reverse compatibility
+	object["timestamp"] = time.Unix(0, m.GetTimestamp()).Format("2006-01-02 15:04:05.000")
+	object["time"] = time.Unix(0, m.GetTimestamp()).Format("2006-01-02 15:04:05.000")
+
 	// Handle standard heka fields
 	object["uuid"] = m.GetUuidString()
-	object["timestamp"] = time.Unix(0, m.GetTimestamp()).Format("2006-01-02 15:04:05.000")
 	object["type"] = m.GetType()
 	object["logger"] = m.GetLogger()
 	object["severity"] = m.GetSeverity()
@@ -149,27 +149,23 @@ func (f *KVFirehoseOutput) parseFields(pack *pipeline.PipelinePack) (
 	object["hostname"] = m.GetHostname()
 
 	seriesName = ""
-	timestampColumn = ""
 	// store each dynamic field as a top level entry
 	for _, field := range m.Fields {
 		fieldType := field.GetValueType()
 
 		if *field.Name == f.conf.SeriesField && fieldType == message.Field_STRING {
 			seriesName = field.GetValue().(string)
-		} else if *field.Name == f.conf.TimestampColumnField && fieldType == message.Field_STRING {
-			timestampColumn = field.GetValue().(string)
 		} else if field.Name != nil && fieldType != message.Field_BYTES {
 			// ignore byte fields and empty fields
 			object[*field.Name] = field.GetValue()
 		}
 	}
-	return seriesName, timestampColumn, object
+	return seriesName, object
 }
 
 func (f *KVFirehoseOutput) ProcessMessage(pack *pipeline.PipelinePack) error {
 	atomic.AddInt64(&f.recvRecordCount, 1)
-	timestamp := time.Unix(0, pack.Message.GetTimestamp()).Format("2006-01-02 15:04:05.000")
-	seriesName, timestampColumn, object := f.parseFields(pack)
+	seriesName, object := f.parseFields(pack)
 
 	if seriesName == "" {
 		atomic.AddInt64(&f.droppedRecordCount, 1)
@@ -179,10 +175,6 @@ func (f *KVFirehoseOutput) ProcessMessage(pack *pipeline.PipelinePack) error {
 	if len(object) == 0 {
 		atomic.AddInt64(&f.droppedRecordCount, 1)
 		return errors.New("No fields found in message")
-	}
-
-	if timestampColumn != "" {
-		object[timestampColumn] = timestamp
 	}
 
 	record, err := json.Marshal(object)
