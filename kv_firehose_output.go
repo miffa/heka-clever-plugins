@@ -50,7 +50,7 @@ type syncPutterAdapter struct {
 	output *KVFirehoseOutput
 }
 
-func (s *syncPutterAdapter) Flush(batch [][]byte, metadatas []interface{}) {
+func (s *syncPutterAdapter) Flush(batch [][]byte) {
 	count := int64(len(batch))
 
 	var err error
@@ -67,10 +67,6 @@ func (s *syncPutterAdapter) Flush(batch [][]byte, metadatas []interface{}) {
 
 		time.Sleep(time.Duration(delay*250) * time.Millisecond)
 	}
-
-	// Update the cursor (these messages are either lost forever or sent)
-	// and reset the queue
-	s.output.or.UpdateCursor(metadatas[len(metadatas)-1].(string))
 
 	if err != nil {
 		// TODO: PutRecordBatch should return the number of successful records
@@ -201,7 +197,11 @@ func (f *KVFirehoseOutput) ProcessMessage(pack *pipeline.PipelinePack) error {
 		batch = batcher.New(sync)
 		f.batchers[seriesName] = batch
 	}
-	batch.Send(record, pack.QueueCursor)
+	batch.Send(record)
+
+	// We're forgoing any benefits of disk buffering.  With or without it all the messages are
+	// lost if the container crashes.  Supporting would significantly complicate the code.
+	f.or.UpdateCursor(pack.QueueCursor)
 
 	return nil
 }
