@@ -6,7 +6,7 @@ import (
 )
 
 type Sync interface {
-	Flush(batch [][]byte, metadata []interface{})
+	Flush(batch [][]byte)
 }
 
 type Batcher interface {
@@ -21,7 +21,7 @@ type Batcher interface {
 	FlushSize(size int)
 
 	// Messages for length 0 are ignored
-	Send(msg []byte, metadata interface{}) error
+	Send(msg []byte) error
 	Flush()
 }
 
@@ -31,17 +31,12 @@ type batcher struct {
 	flushSize     int
 
 	sync      Sync
-	msgChan   chan<- messagePack
+	msgChan   chan<- []byte
 	flushChan chan<- struct{}
 }
 
-type messagePack struct {
-	msg      []byte
-	metadata interface{}
-}
-
 func New(sync Sync) *batcher {
-	msgChan := make(chan messagePack, 100)
+	msgChan := make(chan []byte, 100)
 	flushChan := make(chan struct{})
 
 	b := &batcher{
@@ -71,12 +66,12 @@ func (b *batcher) FlushSize(size int) {
 	b.flushSize = size
 }
 
-func (b *batcher) Send(msg []byte, metadata interface{}) error {
+func (b *batcher) Send(msg []byte) error {
 	if len(msg) <= 0 {
 		return fmt.Errorf("Empty messages can't be sent")
 	}
 
-	b.msgChan <- messagePack{msg, metadata}
+	b.msgChan <- msg
 	return nil
 }
 
@@ -93,34 +88,32 @@ func (b *batcher) batchSize(batch [][]byte) int {
 	return total
 }
 
-func (b *batcher) sendBatch(batch [][]byte, metadata []interface{}) ([][]byte, []interface{}) {
+func (b *batcher) sendBatch(batch [][]byte) [][]byte {
 	if len(batch) > 0 {
-		b.sync.Flush(batch, metadata)
+		b.sync.Flush(batch)
 	}
-	return [][]byte{}, []interface{}{}
+	return [][]byte{}
 }
 
-func (b *batcher) startBatcher(msgChan <-chan messagePack, flushChan <-chan struct{}) {
+func (b *batcher) startBatcher(msgChan <-chan []byte, flushChan <-chan struct{}) {
 	batch := [][]byte{}
-	metadata := []interface{}{}
 
 	for {
 		select {
 		case <-time.After(b.flushInterval):
-			batch, metadata = b.sendBatch(batch, metadata)
+			batch = b.sendBatch(batch)
 		case <-flushChan:
-			batch, metadata = b.sendBatch(batch, metadata)
-		case pack := <-msgChan:
+			batch = b.sendBatch(batch)
+		case msg := <-msgChan:
 			size := b.batchSize(batch)
-			if b.flushSize < size+len(pack.msg) {
-				batch, metadata = b.sendBatch(batch, metadata)
+			if b.flushSize < size+len(msg) {
+				batch = b.sendBatch(batch)
 			}
 
-			batch = append(batch, pack.msg)
-			metadata = append(metadata, pack.metadata)
+			batch = append(batch, msg)
 
 			if b.flushCount <= len(batch) || b.flushSize <= b.batchSize(batch) {
-				batch, metadata = b.sendBatch(batch, metadata)
+				batch = b.sendBatch(batch)
 			}
 		}
 	}
