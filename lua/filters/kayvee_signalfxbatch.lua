@@ -162,6 +162,12 @@ function flush()
    return 0
 end
 
+--------------------------------
+--
+--  Public interface
+--
+--------------------------------
+
 function process_message()
     -- Get timestamp (in milliseconds)
     local ts = tonumber(read_message("Timestamp"))

@@ -287,7 +287,7 @@ end
 --------------------------------
 
 function process_message()
-    api_message = influxdb_line_msg(config, current_batch_count)
+    api_message = influxdb_line_msg(config)
     if not api_message then return -1 end
 
     -- Batch
