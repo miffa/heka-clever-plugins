@@ -4,7 +4,6 @@ package.path = package.path .. ";../?.lua"
 local mocks = require 'mocks'
 local util = require 'util'
 local cjson = require 'cjson'
-require 'kayvee_signalfxbatch'
 
 describe("Kayvee Signalfx Batch Filter", function()
     -- Prep mocks, which are re-used in multiple tests
@@ -33,14 +32,16 @@ describe("Kayvee Signalfx Batch Filter", function()
         custom_dim="custom_value",
     }
 
-    it("should process and flush one message", function()
-        -- Test setup
+    function test_setup()
         mocks.reset()
         mocks.set_config(mock_cfg)
-        configure()
+        require 'kayvee_signalfxbatch'
         mocks.set_next_message(mock_msg)
+    end
 
-        -- Test
+    it("should process and flush one message", function()
+        test_setup()
+
         process_result = process_message()
         assert.equals(process_result, 0, "Should process_message successfuly")
         flush()
@@ -57,13 +58,8 @@ describe("Kayvee Signalfx Batch Filter", function()
     end)
 
     it("should batch two messages", function()
-        -- Test setup
-        mocks.reset()
-        mocks.set_config(mock_cfg)
-        configure()
-        mocks.set_next_message(mock_msg)
+        test_setup()
 
-        -- Test
         process_result = process_message()
         assert.equals(process_result, 0, "Should process_message successfuly")
         process_result = process_message()
@@ -76,13 +72,8 @@ describe("Kayvee Signalfx Batch Filter", function()
     end)
 
     it("should label gauges separately from counters", function()
-        -- Test setup
-        mocks.reset()
-        mocks.set_config(mock_cfg)
-        configure()
-        mocks.set_next_message(mock_msg)
+        test_setup()
 
-        -- Test
         local mock_gauge = util.deepcopy(mock_msg)
         mock_msg["Fields[stat_type]"] = "gauge"
         mocks.set_next_message(mock_msg)
@@ -106,11 +97,7 @@ describe("Kayvee Signalfx Batch Filter", function()
     end)
 
     it("should flush() messages on a timer_event", function()
-        -- Test setup
-        mocks.reset()
-        mocks.set_config(mock_cfg)
-        configure()
-        mocks.set_next_message(mock_msg)
+        test_setup()
 
         -- Test
         process_result = process_message()

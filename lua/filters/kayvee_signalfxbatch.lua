@@ -87,29 +87,20 @@ require "string"
 require "table"
 require "math"
 
-config = {}
-function configure()
-    c = {
-        -- Read these values dynamically, depending on message field value
-        --  * series
-        --  * value
-        --  * dimensions (also adds field values from default_dimensions)
-        --  * stat_type
-        series_field = read_config("series_field"),
-        value_field = read_config("value_field"),
-        dimensions_field = read_config("dimensions_field"),
-        stat_type_field = read_config("stat_type_field"),
-
-        default_dimensions = read_config("default_dimensions") or "",
-        msg_type = read_config("msg_type") or "signalfxbatch",
-        batch_max_count = read_config("max_count") or 20,
-    }
-    -- update config, which is used throughout plugin
-    config = c
-end
-
--- TODO: How to error/fail immediately on bad config?
-configure()
+local config = {
+    -- Read these values dynamically, depending on message field value
+    --  * series
+    --  * value
+    --  * dimensions (also adds field values from default_dimensions)
+    --  * stat_type
+    series_field = read_config("series_field") or error("series_field must be specified"),
+    value_field = read_config("value_field") or error("value_field must be specified"),
+    dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
+    stat_type_field = read_config("stat_type_field") or error("stat_type_field must be specified"),
+    default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
+    msg_type = read_config("msg_type") or "signalfxbatch",
+    batch_max_count = read_config("max_count") or 20,
+}
 
 local base_fields_map = {
     Type = true,
