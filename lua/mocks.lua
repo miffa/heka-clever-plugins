@@ -10,6 +10,9 @@ local DEFAULT_MOCKS = {
     cfg = {},
     injected_payloads = {},
     next_message=nil,
+    next_field=1,
+    fields = {},
+    written_messages = {}
 }
 local MOCKS = util.deepcopy(DEFAULT_MOCKS)
 
@@ -34,6 +37,17 @@ end
 function module.set_next_message(msg)
     debug("set_next_message")
     MOCKS.next_message = msg
+
+    MOCKS.next_field = 1
+    MOCKS.fields = {}
+    for k, v in pairs(msg) do
+        if k:find("Fields%[") ~= nil then
+            MOCKS.fields[#MOCKS.fields+1] = {
+                name=k:sub(8, -2), -- sub to trim off "Fields[" and "]"
+                value=v
+            }
+        end
+    end
 end
 
 -- return all injected payloads
@@ -43,6 +57,12 @@ function module.injected_payloads()
         debug(i .. "\t" .. tostring(v.data))
     end
     return MOCKS.injected_payloads
+end
+
+-- return all written messages
+function module.written_messages()
+    debug("written_messages")
+    return MOCKS.written_messages
 end
 
 -- reset mocks to default state
@@ -88,6 +108,34 @@ function read_message(field)
         return raw_msg
     end
     return MOCKS.next_message[field]
+end
+
+function read_next_field()
+    debug("heka.read_next_field")
+
+    if not MOCKS.next_message then
+        assert(False, "No next_message set in Heka mocks")
+    end
+
+    if MOCKS.next_field > #MOCKS.fields then
+        return false, nil, nil, nil, #MOCKS.fields
+    end
+
+    local field = MOCKS.fields[MOCKS.next_field]
+    MOCKS.next_field = MOCKS.next_field + 1
+
+    -- Returns type (which assumed also be a string [type 0]), name, value, representation, count
+    return 0, field["name"], field["value"], "-", #MOCKS.fields
+end
+
+function write_message(name, value)
+    debug("heka.write_message: "..name)    
+
+    if value == nil then
+        value = "__REMOVED_FIELD__"
+    end
+
+    MOCKS.written_messages[name] = value
 end
 
 function inject_payload(payload_type, payload_name, data)
