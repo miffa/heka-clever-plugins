@@ -25,12 +25,25 @@ local field_renames = {
 }
 
 function process_message()
-    for field, rename in pairs(field_renames) do
-        local val = read_message("Fields["..field.."]")
+    -- Process dynamic fields
+    while true do
+        local typ, name, value, representation, count = read_next_field()
 
-        if val ~= nil then -- Rename field if it exists
-            write_message("Fields["..field.."]", nil) -- Setting to nil deletes field
-            write_message("Fields["..rename.."]", val)
+        if not typ then break end
+
+        if typ ~= 1 then -- exclude bytes
+            rename = name
+
+            if field_renames[name] ~= nil then
+                rename = field_renames[name]
+            elseif name:find("%.") ~= nil then
+                rename = name:gsub("%.", "_")
+            end
+
+            if name ~= rename then
+                write_message("Fields["..name.."]", nil) -- Setting to nil deletes field
+                write_message("Fields["..rename.."]", value)
+            end
         end
     end
 
