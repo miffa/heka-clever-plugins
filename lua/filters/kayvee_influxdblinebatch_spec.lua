@@ -30,14 +30,15 @@ describe("Kayvee Influxdbline Batch Filter", function()
     local mock_msg= {}
     mock_msg['Timestamp'] = 2000000
     mock_msg['Hostname'] = "hostname"
-    mock_msg['Fields[env]'] = "test"
-    mock_msg["Fields[series_f]"] = "series"
-    mock_msg["Fields[series]"] = "series-name"
-    mock_msg["Fields[value_f]"] = "value"
-    mock_msg["Fields[value]"] = 100
-    mock_msg["Fields[dimensions_f]"] = "dimensions"
-    mock_msg["Fields[dimensions]"] = ""
-    mock_msg["Fields[custom_dim]"] = "custom_value"
+    mock_msg.Fields = {}
+    mock_msg.Fields.env = "test"
+    mock_msg.Fields.series_f = "series"
+    mock_msg.Fields.series = "series-name"
+    mock_msg.Fields.value_f = "value"
+    mock_msg.Fields.value = 100
+    mock_msg.Fields.dimensions_f = "dimensions"
+    mock_msg.Fields.dimensions = ""
+    mock_msg.Fields.custom_dim = "custom_value"
 
     function test_setup()
         mocks.reset()
@@ -87,7 +88,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         -- Test setup
         test_setup()
         mock_msg_new = util.deepcopy(mock_msg)
-        mock_msg_new["Fields[series]"] = "series-name-new"
+        mock_msg_new.Fields.series = "series-name-new"
         mocks.set_next_message(mock_msg_new)
 
         -- Test
@@ -103,7 +104,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         -- Test setup
         test_setup()
         mock_msg_new = util.deepcopy(mock_msg)
-        mock_msg_new["Fields[value]"] = 999
+        mock_msg_new.Fields.value = 999
         mocks.set_next_message(mock_msg_new)
 
         -- Test
@@ -119,9 +120,9 @@ describe("Kayvee Influxdbline Batch Filter", function()
         -- Test setup
         test_setup()
         mock_msg_new = util.deepcopy(mock_msg)
-        mock_msg_new["Fields[dimensions]"] = "custom_dim custom_dim2"
-        mock_msg_new["Fields[custom_dim]"] = "aaa"
-        mock_msg_new["Fields[custom_dim2]"] = "bbb"
+        mock_msg_new.Fields.dimensions = "custom_dim custom_dim2"
+        mock_msg_new.Fields.custom_dim = "aaa"
+        mock_msg_new.Fields.custom_dim2 = "bbb"
         mocks.set_next_message(mock_msg_new)
 
         -- Test

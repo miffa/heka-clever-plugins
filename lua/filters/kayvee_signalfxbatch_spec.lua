@@ -18,15 +18,16 @@ describe("Kayvee Signalfx Batch Filter", function()
     local mock_msg = {}
     mock_msg['Timestamp'] = 2000000
     mock_msg['Hostname'] = "hostname"
-    mock_msg["Fields[series_f]"] = "series"
-    mock_msg["Fields[series]"] = "series-name"
-    mock_msg["Fields[value_f]"] = "value"
-    mock_msg["Fields[value]"] = 100
-    mock_msg["Fields[stat_type_f]"] = "stat_type"
-    mock_msg["Fields[stat_type]"] = "counter"
-    mock_msg["Fields[dimensions_f]"] = "dimensions"
-    mock_msg["Fields[dimensions]"] = "custom_dim"
-    mock_msg["Fields[custom_dim]"] = "custom_value"
+    mock_msg.Fields = {}
+    mock_msg.Fields.series_f = "series"
+    mock_msg.Fields.series = "series-name"
+    mock_msg.Fields.value_f = "value"
+    mock_msg.Fields.value = 100
+    mock_msg.Fields.stat_type_f = "stat_type"
+    mock_msg.Fields.stat_type = "counter"
+    mock_msg.Fields.dimensions_f = "dimensions"
+    mock_msg.Fields.dimensions = "custom_dim"
+    mock_msg.Fields.custom_dim = "custom_value"
     expected_dimensions = {
         Hostname="hostname",
         custom_dim="custom_value",
@@ -75,7 +76,7 @@ describe("Kayvee Signalfx Batch Filter", function()
         test_setup()
 
         local mock_gauge = util.deepcopy(mock_msg)
-        mock_msg["Fields[stat_type]"] = "gauge"
+        mock_msg.Fields.stat_type = "gauge"
         mocks.set_next_message(mock_msg)
         process_result = process_message()
         assert.equals(process_result, 0, "Should process_message successfuly")
