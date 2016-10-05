@@ -29,3 +29,6 @@ script:
 - pushd ./lua/filters
 - busted .
 - popd
+- pushd ./lua/decoders
+- busted .
+- popd
