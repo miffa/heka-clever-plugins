@@ -57,6 +57,7 @@ describe("Elasticsearch field normalizer", function()
         mock_msg['Hostname'] = "hostname"
         mock_msg["Fields[params.District]"] = "test"
         mock_msg["Fields[params.Foop]"] = "test"
+        mock_msg["Fields[params.StartingAfter]"] = "test"
         mocks.set_next_message(mock_msg)
 
         assert.equals(process_message(), 0, "Should process_message successfully")
