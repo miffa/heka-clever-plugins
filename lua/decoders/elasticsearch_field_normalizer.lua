@@ -25,24 +25,31 @@ local field_renames = {
 }
 
 function process_message()
-    -- Process dynamic fields
+    toRename = {}
+
     while true do
         local typ, name, value, representation, count = read_next_field()
 
         if not typ then break end
 
-        rename = name
+        if typ ~= 1 then -- exclude bytes
+            local rename = name
 
-        if field_renames[name] ~= nil then
-            rename = field_renames[name]
-        elseif name:find("%.") ~= nil then
-            rename = name:gsub("%.", "_")
-        end
+            if field_renames[name] ~= nil then
+                rename = field_renames[name]
+            elseif name:find("%.") ~= nil then
+                rename = name:gsub("%.", "_")
+            end
 
-        if name ~= rename then
-            write_message("Fields["..name.."]", nil) -- Setting to nil deletes field
-            write_message("Fields["..rename.."]", value)
+            if name ~= rename then
+                toRename[#toRename+1] = { old=name, new=rename, value=value }
+            end
         end
+    end
+
+    for i, rename in ipairs(toRename) do
+        write_message("Fields["..rename.old.."]", nil) -- Setting to nil deletes field
+        write_message("Fields["..rename.new.."]", rename.value)
     end
 
     return 0
