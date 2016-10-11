@@ -27,7 +27,7 @@ local function copy_message()
         output[field] = read_message(field)
     end
 
-	output.Fields = {}
+    output.Fields = {}
 
     -- Process dynamic fields
     while true do
@@ -74,10 +74,10 @@ function process_message()
     if #routes > MAX_ROUTES then return -1 end
 
     -- Copy message completely, then remove routing info
-	local msg = copy_message()
+    local msg = copy_message()
     msg.Fields["_kvmeta"] = nil
 
-	-- Inject original message, with routing removed
+    -- Inject original message, with routing removed
     inject_message(msg)
 
     -- Inject one message for each valid route
