@@ -1,5 +1,7 @@
 .PHONY: lua-tests
 
+SHELL := /bin/bash
+
 test: lua-tests
 
 lua-deps: # Install dependencies to run Lua tests
