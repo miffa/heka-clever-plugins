@@ -6,6 +6,19 @@ local util = require 'util'
 --------------------
 local module = {}
 
+-- Heka's base message fields.
+-- Other fields are user defined.
+local base_fields = {
+    EnvVersion = true,
+    Hostname = true,
+    Logger = true,
+    Payload = true,
+    Pid = true,
+    Severity = true,
+    Timestamp = true,
+    Type = true
+}
+
 local DEFAULT_MOCKS = {
     cfg = {},
     injected_payloads = {},
@@ -53,7 +66,24 @@ function module.set_next_message(msg)
             }
         end
     end
+
+    -- below mocks support `read_next_field` calls
     MOCKS.read_next_field_calls = 0
+    -- User fields
+    for k, v in pairs(MOCKS.next_message.Fields) do
+        table.insert(MOCKS.read_next_field.fields, {
+            name=k,
+            value=v,
+        })
+    end
+
+    -- Heka base fields
+    for k, v in pairs(base_fields) do
+        table.insert(MOCKS.read_next_field.fields, {
+            name=k,
+            value=v,
+        })
+    end
 end
 
 -- return all injected payloads
@@ -172,18 +202,7 @@ end
 
 function read_next_field()
     MOCKS.read_next_field.calls = MOCKS.read_next_field.calls + 1
-    debug("heka.read_next_field:" .. MOCKS.read_next_field.calls)
-    -- On the field call to read_next_field, save the fields.
-    -- This ensures they are read in a consistent order.
-    if MOCKS.read_next_field.calls == 1 then
-        for k, v in pairs(MOCKS.next_message) do
-            table.insert(MOCKS.read_next_field.fields, {
-                name=k,
-                value=v,
-            })
-        end
-    end
-
+    debug("heka.read_next_field: calls=" .. MOCKS.read_next_field.calls)
     -- Once we've read all the fields, return nil
     idx = MOCKS.read_next_field.calls
     if idx > #MOCKS.read_next_field.fields then return nil end

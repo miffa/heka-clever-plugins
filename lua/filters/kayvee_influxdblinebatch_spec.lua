@@ -21,9 +21,9 @@ describe("Kayvee Influxdbline Batch Filter", function()
         skip_fields = "**all_base** Timestamp Pid Type Logger Severity programname test title source level env type _prefix _postfix",
         max_count = 100,
 
-        series_field="series_f",
-        value_field="value_f",
-        dimensions_field="dimensions_f",
+        series_field="series",
+        value_ref_field="value_f",
+        dimensions_field="dimensions",
         default_dimensions="Hostname env",
     }
 
@@ -32,11 +32,9 @@ describe("Kayvee Influxdbline Batch Filter", function()
     mock_msg['Hostname'] = "hostname"
     mock_msg.Fields = {}
     mock_msg.Fields.env = "test"
-    mock_msg.Fields.series_f = "series"
     mock_msg.Fields.series = "series-name"
     mock_msg.Fields.value_f = "value"
     mock_msg.Fields.value = 100
-    mock_msg.Fields.dimensions_f = "dimensions"
     mock_msg.Fields.dimensions = ""
     mock_msg.Fields.custom_dim = "custom_value"
 
@@ -56,7 +54,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         assert.equals(#injected, 1)
         actual_msg = injected[1]
         assert.equals(1, line_count(actual_msg), "Incorrect number of Heka messages batched in payload")
-        assert.equals("influxdblinebatch", actual_msg.payload_name)
+        assert.equals("kayvee_influxdblinebatch", actual_msg.payload_name)
         assert.equals("txt", actual_msg.payload_type)
         assert.equals("series-name,env=test,Hostname=hostname value=100.000000 2\n", actual_msg.data)
     end)

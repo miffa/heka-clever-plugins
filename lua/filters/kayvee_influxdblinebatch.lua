@@ -78,14 +78,14 @@ Config:
 
         [KayveeInfluxdbLineBatchFilter.config]
         series_field="series_f"
-        value_field="value_f"
+        value_ref_field="value_f"
         stat_type_field="stat_type_f"
         dimensions_field="dimensions_f"
         default_dimensions="Hostname"
         max_count = 1000
 
     [InfluxdbLineOutput]
-    message_matcher = "Fields[payload_name] == 'influxdblinebatch'"
+    message_matcher = "Fields[payload_name] == 'kayvee_influxdblinebatch'"
     encoder = "PayloadEncoder"
     type = "HttpOutput"
     address = "%ENV[INFLUXDB_LINE_PROTO]://%ENV[INFLUXDB_LINE_HOST]:%ENV[INFLUXDB_LINE_PORT]/write?db=%ENV[INFLUXDB_LINE_DB]&precision=ms"
@@ -95,6 +95,7 @@ Config:
 --]=]
 
 local field_util = require "field_util"
+local table = require "table"
 
 --------------------------------
 --
@@ -105,13 +106,13 @@ local field_util = require "field_util"
 -- Configuration
 local config = {
     series_field = read_config("series_field") or error("series_field must be specified"),
-    value_field = read_config("value_field") or error("value_field must be specified"),
+    value_ref_field = read_config("value_ref_field") or error("value_ref_field must be specified"),
     dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
     default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
 
     decimal_precision = read_config("decimal_precision") or "6",
     timestamp_precision = read_config("timestamp_precision") or "ms",
-    payload_name = read_config("payload_name") or "influxdblinebatch",
+    payload_name = read_config("payload_name") or "kayvee_influxdblinebatch",
     batch_max_count = read_config("max_count") or 20,
 }
 
@@ -138,17 +139,6 @@ local function read_field(key)
     else
         return read_message("Fields["..key.."]")
     end
-end
-
-local function lookup_field_then_value(key)
-    if not key then return nil end
-
-    -- Get field name
-    local field_name = read_message("Fields["..key.."]")
-    if not field_name or field_name == "" then return nil end
-
-    -- Get field value
-    return read_field(field_name)
 end
 
 local function get_dimensions(s)
@@ -223,7 +213,7 @@ local function tags_fields_tables(config)
     local fields = {}
 
     -- Get value
-    local value = lookup_field_then_value(config.value_field)
+    local value = read_field(read_field(config.value_ref_field))
     if not value then return nil end
     fields = { value = value }
 
@@ -231,7 +221,7 @@ local function tags_fields_tables(config)
     local tags = {}
 
     -- Get custom dimensions
-    local dimensions_str = lookup_field_then_value(config.dimensions_field)
+    local dimensions_str = read_field(config.dimensions_field)
     if not dimensions_str then return nil end
     local dims = get_dimensions(dimensions_str)
     for k, v in pairs(dims) do
@@ -256,7 +246,7 @@ local function influxdb_line_msg(config)
         ts = read_message('Timestamp')
     end
 
-    local series = lookup_field_then_value(config.series_field)
+    local series = read_field(config.series_field)
     if not series then return nil end
 
     local fields, tags = tags_fields_tables(config)

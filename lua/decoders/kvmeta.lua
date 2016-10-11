@@ -6,6 +6,7 @@ Splits a message into multiple messages, with attached routing information.
 
 local cjson = require "cjson"
 local util = require "util"
+local table = require "table"
 
 local base_fields = {
     EnvVersion = true,
@@ -34,9 +35,7 @@ local function copy_message()
         if not typ then break end
 
         if not base_fields[name] then
-            if typ ~= 1 then -- exclude bytes
-                output[name] = value
-            end
+            output.Fields[name] = value
         end
     end
     return output
@@ -81,13 +80,29 @@ function process_message()
 	-- Inject original message, with routing removed
     inject_message(msg)
 
-    -- Inject one message for each route
+    -- Inject one message for each valid route
     for _, route in ipairs(routes) do
         local msg_copy = deepcopy(msg)
+        local valid_route = true
         for k, v in pairs(route) do
+            -- 'dimensions' must be an array of strings
+            if k == "dimensions" then
+                if type(v) ~= "table" then
+                    valid_route=false
+                    break
+                end
+
+                if #v == 0 then
+                    v = ""
+                else
+                    v = table.concat(v, " ")
+                end
+            end
+
             msg_copy.Fields["_kvmeta." .. k] = v
         end
-        inject_message(msg_copy)
+
+        if valid_route then inject_message(msg_copy) end
     end
 
     return 0
