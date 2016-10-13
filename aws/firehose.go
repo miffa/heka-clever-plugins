@@ -66,23 +66,19 @@ func (f Firehose) sendRecords(records [][]byte) (*firehose.PutRecordBatchOutput,
 // PutRecordBatch sends an array of records to the Firehose stream
 // as a single batch request
 func (f Firehose) PutRecordBatch(records [][]byte) error {
-	retries := 5
-	delay := 250
-
 	res, err := f.sendRecords(records)
 	if err != nil {
 		return err
 	}
 
+	retries := 0
+	delay := 250
 	for *res.FailedPutCount != 0 {
-		if retries <= 0 {
-			return fmt.Errorf("Too many retries failed to put records -- stream: %s", f.stream)
-		}
-		time.Sleep(time.Duration(delay) * time.Millisecond)
-
 		kvlog.WarnD("retry-filed-records", logger.M{
-			"stream": f.stream, "failed-record-count": *res.FailedPutCount, "retries-left": retries,
+			"stream": f.stream, "failed-record-count": *res.FailedPutCount, "retries": retries,
 		})
+
+		time.Sleep(time.Duration(delay) * time.Millisecond)
 
 		retryRecords := [][]byte{}
 		for idx, entry := range res.RequestResponses {
@@ -99,8 +95,11 @@ func (f Firehose) PutRecordBatch(records [][]byte) error {
 		if err != nil {
 			return err
 		}
-		retries--
-		delays *= 2
+		if retries > 4 {
+			return fmt.Errorf("Too many retries failed to put records -- stream: %s", f.stream)
+		}
+		retries += 1
+		delay *= 2
 	}
 	return nil
 }
