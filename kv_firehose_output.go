@@ -53,21 +53,7 @@ type syncPutterAdapter struct {
 func (s *syncPutterAdapter) Flush(batch [][]byte) {
 	count := int64(len(batch))
 
-	var err error
-	// Expotential backoff with retry limit
-	for retries, delay := 0, 1; retries < 5; retries, delay = retries+1, delay*2 {
-		err = s.client.PutRecordBatch(batch)
-
-		if err == nil {
-			break
-		}
-
-		s.output.or.LogError(
-			fmt.Errorf("Firehose put-record failure: %s.  Retry %d", err.Error(), retries))
-
-		time.Sleep(time.Duration(delay*250) * time.Millisecond)
-	}
-
+	err := s.client.PutRecordBatch(batch)
 	if err != nil {
 		// TODO: PutRecordBatch should return the number of successful records
 		//       so that the correct amount can be set here

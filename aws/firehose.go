@@ -2,11 +2,16 @@ package aws
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/firehose"
 	iface "github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
+
+	"gopkg.in/Clever/kayvee-go.v3/logger"
 )
+
+var kvlog = logger.New("redshift-output")
 
 // RecordPutter is the interface for sending data to a delivery stream
 type RecordPutter interface {
@@ -41,9 +46,7 @@ func (f Firehose) PutRecord(record []byte) error {
 	return err
 }
 
-// PutRecordBatch sends an array of records to the Firehose stream
-// as a single batch request
-func (f Firehose) PutRecordBatch(records [][]byte) error {
+func (f Firehose) sendRecords(records [][]byte) (*firehose.PutRecordBatchOutput, error) {
 	// Construct the array of firehose.Records
 	awsRecords := make([]*firehose.Record, len(records))
 	for idx, record := range records {
@@ -56,13 +59,47 @@ func (f Firehose) PutRecordBatch(records [][]byte) error {
 		DeliveryStreamName: &f.stream,
 		Records:            awsRecords,
 	}
-	res, err := f.client.PutRecordBatch(input)
+
+	return f.client.PutRecordBatch(input)
+}
+
+// PutRecordBatch sends an array of records to the Firehose stream
+// as a single batch request
+func (f Firehose) PutRecordBatch(records [][]byte) error {
+	res, err := f.sendRecords(records)
 	if err != nil {
 		return err
 	}
-	// Check for any individual records failing
-	if *res.FailedPutCount != 0 {
-		return fmt.Errorf("%d records failed to upload", *res.FailedPutCount)
+
+	retries := 0
+	delay := 250
+	for *res.FailedPutCount != 0 {
+		kvlog.WarnD("retry-filed-records", logger.M{
+			"stream": f.stream, "failed-record-count": *res.FailedPutCount, "retries": retries,
+		})
+
+		time.Sleep(time.Duration(delay) * time.Millisecond)
+
+		retryRecords := [][]byte{}
+		for idx, entry := range res.RequestResponses {
+			if *entry.ErrorMessage != "" {
+				kvlog.ErrorD("failed-record", logger.M{
+					"stream": f.stream, "msg": &entry.ErrorMessage,
+				})
+
+				retryRecords = append(retryRecords, records[idx])
+			}
+		}
+
+		res, err = f.sendRecords(retryRecords)
+		if err != nil {
+			return err
+		}
+		if retries > 4 {
+			return fmt.Errorf("Too many retries failed to put records -- stream: %s", f.stream)
+		}
+		retries += 1
+		delay *= 2
 	}
 	return nil
 }
