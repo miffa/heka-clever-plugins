@@ -6,13 +6,31 @@ local util = require 'util'
 --------------------
 local module = {}
 
+-- Heka's base message fields.
+-- Other fields are user defined.
+local base_fields = {
+    EnvVersion = true,
+    Hostname = true,
+    Logger = true,
+    Payload = true,
+    Pid = true,
+    Severity = true,
+    Timestamp = true,
+    Type = true
+}
+
 local DEFAULT_MOCKS = {
     cfg = {},
     injected_payloads = {},
+    injected_messages = {},
     next_message=nil,
     next_field=1,
     fields = {},
-    written_messages = {}
+    written_messages = {},
+    read_next_field = {
+        calls = 0,
+        fields = {},
+    }
 }
 local MOCKS = util.deepcopy(DEFAULT_MOCKS)
 
@@ -48,6 +66,24 @@ function module.set_next_message(msg)
             }
         end
     end
+
+    -- below mocks support `read_next_field` calls
+    MOCKS.read_next_field_calls = 0
+    -- User fields
+    for k, v in pairs(MOCKS.next_message.Fields) do
+        table.insert(MOCKS.read_next_field.fields, {
+            name=k,
+            value=v,
+        })
+    end
+
+    -- Heka base fields
+    for k, v in pairs(base_fields) do
+        table.insert(MOCKS.read_next_field.fields, {
+            name=k,
+            value=v,
+        })
+    end
 end
 
 -- return all injected payloads
@@ -63,6 +99,15 @@ end
 function module.written_messages()
     debug("written_messages")
     return MOCKS.written_messages
+end
+
+-- return all injected messages
+function module.injected_messages()
+    debug("injected_messages")
+    for i, v in ipairs(MOCKS.injected_messages) do
+        debug(i .. "\t" .. tostring(v.data))
+    end
+    return MOCKS.injected_messages
 end
 
 -- reset mocks to default state
@@ -107,6 +152,14 @@ function read_message(field)
         end
         return raw_msg
     end
+
+	-- Return non-base field
+	if string.match(field, 'Fields%[') then
+		field = string.sub(field, 8, -2)
+		return MOCKS.next_message.Fields[field]
+	end
+
+	-- Return Heka base field
     return MOCKS.next_message[field]
 end
 
@@ -129,7 +182,7 @@ function read_next_field()
 end
 
 function write_message(name, value)
-    debug("heka.write_message: "..name)    
+    debug("heka.write_message: "..name)
 
     if value == nil then
         value = "__REMOVED_FIELD__"
@@ -145,6 +198,27 @@ function inject_payload(payload_type, payload_name, data)
         payload_name = payload_name,
         data = data,
     })
+end
+
+function read_next_field()
+    MOCKS.read_next_field.calls = MOCKS.read_next_field.calls + 1
+    debug("heka.read_next_field: calls=" .. MOCKS.read_next_field.calls)
+    -- Once we've read all the fields, return nil
+    idx = MOCKS.read_next_field.calls
+    if idx > #MOCKS.read_next_field.fields then return nil end
+
+    -- Return the field
+    typ = "type"
+    name = MOCKS.read_next_field.fields[idx].name
+    value = MOCKS.read_next_field.fields[idx].value
+    repr = "representation"
+    count = 1
+    return typ, name, value, repr, count
+end
+
+function inject_message(message)
+    debug("heka.inject_message: " .. tostring(message))
+    table.insert(MOCKS.injected_messages, message)
 end
 
 function decode_message(s)

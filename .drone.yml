@@ -13,6 +13,7 @@ notify:
     on_success: false
     webhook_url: $$slack_webhook
 script:
+# Run tests for Go postgres library
 - createdb -h localhost -U postgres drone
 - psql -U postgres -h localhost -c "CREATE TABLE \"mock_table\" (s text, i int)" drone
 - pushd postgres
@@ -21,15 +22,5 @@ script:
 - go test
 - popd
 
-# run lua tests by installing the follow libraries:
-- apt-get update
-- apt-get install lua5.1 luarocks
-- luarocks install lua-cjson
-- luarocks install busted
-# Then cd into ./lua/<plugin-type> and run `busted .`
-- pushd ./lua/filters
-- busted .
-- popd
-- pushd ./lua/decoders
-- busted .
-- popd
+# Run tests for lua Plugins
+- make lua-tests

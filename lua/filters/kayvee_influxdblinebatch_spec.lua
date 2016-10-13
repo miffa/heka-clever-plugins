@@ -21,23 +21,22 @@ describe("Kayvee Influxdbline Batch Filter", function()
         skip_fields = "**all_base** Timestamp Pid Type Logger Severity programname test title source level env type _prefix _postfix",
         max_count = 100,
 
-        series_field="series_f",
-        value_field="value_f",
-        dimensions_field="dimensions_f",
+        series_field="series",
+        value_ref_field="value_f",
+        dimensions_field="dimensions",
         default_dimensions="Hostname env",
     }
 
     local mock_msg= {}
     mock_msg['Timestamp'] = 2000000
     mock_msg['Hostname'] = "hostname"
-    mock_msg['Fields[env]'] = "test"
-    mock_msg["Fields[series_f]"] = "series"
-    mock_msg["Fields[series]"] = "series-name"
-    mock_msg["Fields[value_f]"] = "value"
-    mock_msg["Fields[value]"] = 100
-    mock_msg["Fields[dimensions_f]"] = "dimensions"
-    mock_msg["Fields[dimensions]"] = ""
-    mock_msg["Fields[custom_dim]"] = "custom_value"
+    mock_msg.Fields = {}
+    mock_msg.Fields.env = "test"
+    mock_msg.Fields.series = "series-name"
+    mock_msg.Fields.value_f = "value"
+    mock_msg.Fields.value = 100
+    mock_msg.Fields.dimensions = ""
+    mock_msg.Fields.custom_dim = "custom_value"
 
     function test_setup()
         mocks.reset()
@@ -55,7 +54,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         assert.equals(#injected, 1)
         actual_msg = injected[1]
         assert.equals(1, line_count(actual_msg), "Incorrect number of Heka messages batched in payload")
-        assert.equals("influxdblinebatch", actual_msg.payload_name)
+        assert.equals("kayvee_influxdblinebatch", actual_msg.payload_name)
         assert.equals("txt", actual_msg.payload_type)
         assert.equals("series-name,env=test,Hostname=hostname value=100.000000 2\n", actual_msg.data)
     end)
@@ -87,7 +86,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         -- Test setup
         test_setup()
         mock_msg_new = util.deepcopy(mock_msg)
-        mock_msg_new["Fields[series]"] = "series-name-new"
+        mock_msg_new.Fields.series = "series-name-new"
         mocks.set_next_message(mock_msg_new)
 
         -- Test
@@ -103,7 +102,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         -- Test setup
         test_setup()
         mock_msg_new = util.deepcopy(mock_msg)
-        mock_msg_new["Fields[value]"] = 999
+        mock_msg_new.Fields.value = 999
         mocks.set_next_message(mock_msg_new)
 
         -- Test
@@ -119,9 +118,9 @@ describe("Kayvee Influxdbline Batch Filter", function()
         -- Test setup
         test_setup()
         mock_msg_new = util.deepcopy(mock_msg)
-        mock_msg_new["Fields[dimensions]"] = "custom_dim custom_dim2"
-        mock_msg_new["Fields[custom_dim]"] = "aaa"
-        mock_msg_new["Fields[custom_dim2]"] = "bbb"
+        mock_msg_new.Fields.dimensions = "custom_dim custom_dim2"
+        mock_msg_new.Fields.custom_dim = "aaa"
+        mock_msg_new.Fields.custom_dim2 = "bbb"
         mocks.set_next_message(mock_msg_new)
 
         -- Test

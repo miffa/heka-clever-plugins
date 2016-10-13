@@ -36,7 +36,7 @@ Config:
 
     These dimensions may be Heka internal fields.
 
-- msg_type (string, optional, defaults to "signalfxbatch")
+- msg_type (string, optional, defaults to "kayvee_signalfxbatch")
     `Type` of the message outputted from this filter.
 
 - max_count (int, optional, defaults to 20)
@@ -44,12 +44,18 @@ Config:
 
 - series_field (string, required)
     Field name, which contains a string. The value of this field will be used
-    as the `metric` name in SignalFX.
+    as the metric name in SignalFX.
 
-- value_field (string, required)
-    The `fieldname` to use as the value for the metric in signalfx. If the `value`
-    field is not present this encoder will set one as the value for counters: `1`.
-    A value of `0` will be used for `gauges`.
+- value_ref_field (string, required)
+    The fieldname which contains the value for the metric. For example, if a message had these fields
+
+        ```
+        :Fields:
+            | name:"value_field"    type:string     value:"val"
+            | name:"val"            type:double     value:5
+        ```
+
+    then setting "value_ref_field" = "value_field" would result in a value of 5 written to the metric.
 
 *Example Heka Configuration*
 
@@ -65,14 +71,14 @@ Config:
 
         [KayveeSignalfxBatchFilter.config]
         series_field="series_f"
-        value_field="value_f"
+        value_ref_field="value_f"
         stat_type_field="stat_type_f"
         dimensions_field="dimensions_f"
         default_dimensions="Hostname"
         max_count = 1000
 
     [SignalfxHttpOutput]
-    message_matcher = "Fields[payload_name] == 'signalfxbatch'"
+    message_matcher = "Fields[payload_name] == 'kayvee_signalfxbatch'"
     type = "HttpOutput"
     encoder = "PayloadEncoder"
     address = "https://ingest.signalfx.com/v2/datapoint"
@@ -87,29 +93,20 @@ require "string"
 require "table"
 require "math"
 
-config = {}
-function configure()
-    c = {
-        -- Read these values dynamically, depending on message field value
-        --  * series
-        --  * value
-        --  * dimensions (also adds field values from default_dimensions)
-        --  * stat_type
-        series_field = read_config("series_field"),
-        value_field = read_config("value_field"),
-        dimensions_field = read_config("dimensions_field"),
-        stat_type_field = read_config("stat_type_field"),
-
-        default_dimensions = read_config("default_dimensions") or "",
-        msg_type = read_config("msg_type") or "signalfxbatch",
-        batch_max_count = read_config("max_count") or 20,
-    }
-    -- update config, which is used throughout plugin
-    config = c
-end
-
--- TODO: How to error/fail immediately on bad config?
-configure()
+local config = {
+    -- Read these values dynamically, depending on message field value
+    --  * series
+    --  * value
+    --  * dimensions (also adds field values from default_dimensions)
+    --  * stat_type
+    series_field = read_config("series_field") or error("series_field must be specified"),
+    value_ref_field = read_config("value_ref_field") or error("value_ref_field must be specified"),
+    dimensions_field = read_config("dimensions_field") or error("dimensions_field must be specified") ,
+    stat_type_field = read_config("stat_type_field") or error("stat_type_field must be specified"),
+    default_dimensions = read_config("default_dimensions") or error("default_dimensions must be specified") ,
+    msg_type = read_config("msg_type") or "kayvee_signalfxbatch",
+    batch_max_count = read_config("max_count") or 20,
+}
 
 local base_fields_map = {
     Type = true,
@@ -121,7 +118,7 @@ local base_fields_map = {
     EnvVersion = true
 }
 
--- read_field gets the value for a field.
+-- `read_field` gets the value for a field.
 -- Routes to appropriate lookup for Heka internal fields (see `base_fields_map`)
 -- or custom message fields.
 local function read_field(key)
@@ -134,18 +131,8 @@ local function read_field(key)
     end
 end
 
-local function lookup_field_then_value(key)
-    if not key then return nil end
-
-    -- Get field name
-    local field_name = read_message("Fields["..key.."]")
-    if not field_name or field_name == "" then return nil end
-
-    -- Get field value
-    return read_field(field_name)
-end
-
 local function get_dimensions(s)
+    if s == nil then return {} end
     local dims = {}
     -- TODO: make sure matcher supports all possible field names
     for i in string.gmatch(s, "%S+") do
@@ -164,12 +151,18 @@ function flush()
       if #counters > 0 then output.counter = counters end
       if #gauges > 0 then output.gauge = gauges end
 
-      inject_payload("json", msg_type, cjson.encode(output))
+      inject_payload("json", config.msg_type, cjson.encode(output))
       counters = {}
       gauges = {}
    end
    return 0
 end
+
+--------------------------------
+--
+--  Public interface
+--
+--------------------------------
 
 function process_message()
     -- Get timestamp (in milliseconds)
@@ -178,11 +171,11 @@ function process_message()
     ts = math.floor(ts / 1e6) -- Convert nanoseconds to milliseconds
 
     -- Get value
-    local value = lookup_field_then_value(config.value_field)
+    local value = read_field(read_field(config.value_ref_field))
     if not value then return -1 end
 
     -- Get stat_type
-    local stat_type = lookup_field_then_value(config.stat_type_field)
+    local stat_type = read_field(config.stat_type_field)
     if stat_type == "gauge" then
         if not value then value = 0 end -- default gauge to 0
     elseif stat_type == "counter" then
@@ -191,13 +184,12 @@ function process_message()
         return -1 -- error if invalid stat_type
     end
 
-    -- Get series
-    local series = lookup_field_then_value(config.series_field)
+    ---- Get series
+    local series = read_field(config.series_field)
     if not series then return -1 end
 
-    -- Read custom dimensions from message
-    local dimensions_str = lookup_field_then_value(config.dimensions_field)
-    if not dimensions_str then return -1 end
+    ---- Read custom dimensions from message
+    local dimensions_str = read_field(config.dimensions_field)
     local dims = get_dimensions(dimensions_str)
 
     -- Read default dimensions from message
@@ -214,7 +206,7 @@ function process_message()
         dimensions=dims
     }
 
-    -- Batch data points, grouping by 'counter' or 'gauge'
+    ---- Batch data points, grouping by 'counter' or 'gauge'
     if stat_type == 'counter' then
         table.insert(counters, datum)
     elseif stat_type == 'gauge' then
@@ -223,7 +215,7 @@ function process_message()
         return -1
     end
 
-    if #counters + #gauges == batch_max_count then
+    if #counters + #gauges == config.batch_max_count then
         flush()
     end
     return 0

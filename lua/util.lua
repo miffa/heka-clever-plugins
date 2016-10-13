@@ -4,21 +4,6 @@
 
 local module = {}
 
-function module.shallow_compare(t1, t2)
-    if #t1 - #t2 ~= 0 then
-        return false
-    end
-
-    for k, v in pairs(t1) do
-        if t1[k] ~= t2[k] then
-            debug("shallow_compare: key '" .. k .. "' not equal. (t1: " .. t1[k] .. ", t2: " .. t2[k] .. ")")
-            return false
-        end
-    end
-
-    return true
-end
-
 -- http://lua-users.org/wiki/CopyTable
 function module.deepcopy(orig)
     local orig_type = type(orig)

@@ -12,14 +12,15 @@ describe("Elasticsearch field normalizer", function()
         local mock_msg= {}
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
-        mock_msg['Fields[env]'] = "test"
-        mock_msg["Fields[series_f]"] = "series"
-        mock_msg["Fields[series]"] = "series-name"
-        mock_msg["Fields[value_f]"] = "value"
-        mock_msg["Fields[value]"] = 100
-        mock_msg["Fields[dimensions_f]"] = "dimensions"
-        mock_msg["Fields[dimensions]"] = ""
-        mock_msg["Fields[custom_dim]"] = "custom_value"
+        mock_msg.Fields = {}
+        mock_msg.Fields.env = "test"
+        mock_msg.Fields.series_f = "series"
+        mock_msg.Fields.series = "series-name"
+        mock_msg.Fields.value_f = "value"
+        mock_msg.Fields.value = 100
+        mock_msg.Fields.dimensions_f = "dimensions"
+        mock_msg.Fields.dimensions = ""
+        mock_msg.Fields.custom_dim = "custom_value"
         mocks.set_next_message(mock_msg)
 
         assert.equals(process_message(), 0, "Should process_message successfully")
@@ -36,8 +37,9 @@ describe("Elasticsearch field normalizer", function()
         local mock_msg= {}
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
-        mock_msg['Fields[_meta]'] = "test"
-        mock_msg['Fields[_timestamp]'] = "test"
+        mock_msg.Fields = {}
+        mock_msg.Fields._meta = "test"
+        mock_msg.Fields._timestamp = "test"
         mocks.set_next_message(mock_msg)
 
         assert.equals(process_message(), 0, "Should process_message successfully")
@@ -55,9 +57,10 @@ describe("Elasticsearch field normalizer", function()
         local mock_msg= {}
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
-        mock_msg["Fields[params.District]"] = "test"
-        mock_msg["Fields[params.Foop]"] = "test"
-        mock_msg["Fields[params.StartingAfter]"] = "test"
+        mock_msg.Fields = {}
+        mock_msg.Fields["params.District"] = "test"
+        mock_msg.Fields["params.Foop"] = "test"
+        mock_msg.Fields["params.StartingAfter"] = "test"
         mocks.set_next_message(mock_msg)
 
         assert.equals(process_message(), 0, "Should process_message successfully")
