@@ -5,19 +5,11 @@ Splits a message into multiple messages, with attached routing information.
 --]=]
 
 local cjson = require "cjson"
-local util = require "util"
+local field_util = require "field_util"
 local table = require "table"
 
-local base_fields = {
-    EnvVersion = true,
-    Hostname = true,
-    Logger = true,
-    Payload = true,
-    Pid = true,
-    Severity = true,
-    Timestamp = true,
-    Type = true
-}
+local base_fields = field_util.field_map()
+base_fields['Timestamp'] = true
 
 local function copy_message()
     local output = {}
@@ -42,9 +34,8 @@ local function copy_message()
 end
 
 local function deepcopy(orig)
-    local orig_type = type(orig)
     local copy
-    if orig_type == 'table' then
+    if type(orig) == 'table' then
         copy = {}
         for orig_key, orig_value in next, orig, nil do
             copy[deepcopy(orig_key)] = deepcopy(orig_value)
