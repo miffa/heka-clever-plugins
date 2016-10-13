@@ -73,7 +73,7 @@ func (f Firehose) retryFailedRecords(
 	time.Sleep(time.Duration(delay) * time.Millisecond)
 
 	kvlog.WarnD("retry-filed-records", logger.M{
-		"stream": f.stream, "failed-record-count": *res.FailedPutCount, "retries": retries,
+		"stream": f.stream, "failed-record-count": *res.FailedPutCount, "retries-left": retries,
 	})
 
 	retryRecords := [][]byte{}
