@@ -62,6 +62,7 @@ describe("KV Decoder", function()
 
         expected_msg1 = util.deepcopy(msg)
         expected_msg1.Fields._kvmeta = nil
+        expected_msg1.Fields["_kvmeta.type"] = "logs"
         assert.same(expected_msg1, injected[1])
     end)
 
@@ -75,6 +76,7 @@ describe("KV Decoder", function()
 
         expected_msg1 = util.deepcopy(mock_msg)
         expected_msg1.Fields._kvmeta = nil
+        expected_msg1.Fields["_kvmeta.type"] = "logs"
         assert.same(expected_msg1, injected[1])
 
         expected_msg2 = util.deepcopy(mock_msg)

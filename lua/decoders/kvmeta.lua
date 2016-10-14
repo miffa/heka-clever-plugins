@@ -64,16 +64,19 @@ function process_message()
     MAX_ROUTES = 10
     if #routes > MAX_ROUTES then return -1 end
 
-    -- Copy message completely, then remove routing info
+    -- Copy message completely, removing routing info
     local msg = copy_message()
     msg.Fields["_kvmeta"] = nil
 
-    -- Inject original message, with routing removed
-    inject_message(msg)
+    -- Inject original message, with type 'logs'
+    local msg_copy = deepcopy(msg)
+    msg_copy.Fields["_kvmeta.type"] = 'logs'
+    inject_message(msg_copy)
 
     -- Inject one message for each valid route
     for _, route in ipairs(routes) do
         local msg_copy = deepcopy(msg)
+        msg_copy.Fields["_kvmeta"] = nil
         local valid_route = true
         for k, v in pairs(route) do
             -- 'dimensions' must be an array of strings
