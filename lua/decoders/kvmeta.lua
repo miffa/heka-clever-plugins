@@ -88,7 +88,6 @@ function process_message()
     -- Inject one message for each valid route
     for _, route in ipairs(routes) do
         local msg_copy = deepcopy(msg)
-        msg_copy.Fields["_kvmeta"] = nil
         local valid_route = true
         for k, v in pairs(route) do
             -- 'dimensions' must be an array of strings
