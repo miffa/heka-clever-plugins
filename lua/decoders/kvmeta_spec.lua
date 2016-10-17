@@ -101,7 +101,7 @@ describe("KV Decoder", function()
         -- Test setup
         mocks.reset()
         local cfg =  util.deepcopy(mock_cfg)
-        cfg['type'] = 'kvmeta' -- we expect this to be set on the injected message
+        cfg['msg_type'] = 'kvmeta' -- we expect this to be set on the injected message
         mocks.set_config(cfg)
         util.unrequire('kvmeta')
         require 'kvmeta'

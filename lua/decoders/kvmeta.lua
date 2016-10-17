@@ -4,7 +4,7 @@ Splits a message into multiple messages, with attached routing information.
 
 Config:
 
-- type (string, optional):
+- msg_type (string, optional):
     Sets the message 'Type' field. If unset, has no effect on the message's 'Type'.
 
 --]=]
@@ -14,7 +14,7 @@ local field_util = require "field_util"
 local table = require "table"
 
 local config = {
-    msg_type = read_config("type")
+    msg_type = read_config("msg_type")
 }
 
 local base_fields = field_util.field_map()
