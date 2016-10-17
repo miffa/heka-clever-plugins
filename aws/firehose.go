@@ -82,7 +82,7 @@ func (f Firehose) PutRecordBatch(records [][]byte) error {
 
 		retryRecords := [][]byte{}
 		for idx, entry := range res.RequestResponses {
-			if *entry.ErrorMessage != "" {
+			if entry != nil && *entry.ErrorMessage != "" {
 				kvlog.ErrorD("failed-record", logger.M{
 					"stream": f.stream, "msg": &entry.ErrorMessage,
 				})
