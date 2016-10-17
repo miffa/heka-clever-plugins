@@ -2,11 +2,20 @@
 
 Splits a message into multiple messages, with attached routing information.
 
+Config:
+
+- msg_type (string, optional):
+    Sets the message 'Type' field. If unset, has no effect on the message's 'Type'.
+
 --]=]
 
 local cjson = require "cjson"
 local field_util = require "field_util"
 local table = require "table"
+
+local config = {
+    msg_type = read_config("msg_type")
+}
 
 local base_fields = field_util.field_map()
 base_fields['Timestamp'] = true
@@ -64,12 +73,17 @@ function process_message()
     MAX_ROUTES = 10
     if #routes > MAX_ROUTES then return -1 end
 
-    -- Copy message completely, then remove routing info
+    -- Copy the message, so we can modify inject various routed versions of it.
+    --  * `_kvmeta` routing info
+    --  * set msg.Type, if it was specified in the Decoder's config
     local msg = copy_message()
     msg.Fields["_kvmeta"] = nil
+    if config.msg_type then msg.Type = config.msg_type end
 
-    -- Inject original message, with routing removed
-    inject_message(msg)
+    -- Inject original message, with type 'logs'
+    local msg_copy = deepcopy(msg)
+    msg_copy.Fields["_kvmeta.type"] = 'logs'
+    inject_message(msg_copy)
 
     -- Inject one message for each valid route
     for _, route in ipairs(routes) do
