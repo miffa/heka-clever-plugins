@@ -34,11 +34,11 @@ describe("KV Decoder", function()
         },
     })
 
-
     function test_setup()
         mocks.reset()
         mocks.set_config(mock_cfg)
-        require 'kvmeta'
+        util.unrequire('kvmeta')
+        require('kvmeta')
         mocks.set_next_message(mock_msg)
     end
 
@@ -96,4 +96,30 @@ describe("KV Decoder", function()
         expected_msg3.Fields["_kvmeta.dimensions"] = "custom_dim1 custom_dim2"
         assert.same(expected_msg3, injected[3])
     end)
+
+    it("should set message Type if `type` in config", function()
+        -- Test setup
+        mocks.reset()
+        local cfg =  util.deepcopy(mock_cfg)
+        cfg['type'] = 'kvmeta' -- we expect this to be set on the injected message
+        mocks.set_config(cfg)
+        util.unrequire('kvmeta')
+        require 'kvmeta'
+
+        local msg = util.deepcopy(mock_msg)
+        msg.Fields._kvmeta = cjson.encode({})
+        mocks.set_next_message(msg)
+
+        -- Test
+        assert.equals(0, process_message(), "process_message should succeed")
+        injected = mocks.injected_messages()
+        assert.equals(1, #injected, "Correct number of Heka messages were inserted")
+
+        expected_msg1 = util.deepcopy(msg)
+        expected_msg1.Fields._kvmeta = nil
+        expected_msg1.Fields["_kvmeta.type"] = "logs"
+        expected_msg1.Type = "kvmeta"
+        assert.same(expected_msg1, injected[1])
+    end)
+
 end)

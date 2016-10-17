@@ -64,4 +64,12 @@ function module.lines(str)
   return t
 end
 
+-- Unload a module.
+-- We need this so we can require a Heka lua plugin multiple times, with different config.
+-- http://lua-users.org/lists/lua-l/2009-03/msg00587.html
+function module.unrequire(m)
+    package.loaded[m] = nil
+    _G[m] = nil
+end
+
 return module
