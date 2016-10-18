@@ -32,3 +32,6 @@ lua-tests: lua-deps # Run tests for lua-based plugins
 	@echo ""
 	@echo "Running tests for ./lua/decoders"
 	@pushd ./lua/decoders; busted .; popd
+	@echo ""
+	@echo "Running tests for ./lua/encoders"
+	@pushd ./lua/encoders; busted .; popd
