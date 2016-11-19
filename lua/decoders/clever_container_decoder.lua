@@ -9,6 +9,10 @@ require "string"
 function process_message()
     local programname = read_message("Fields[programname]")
 
+    local force_env = read_message("Fields[container_env]")
+    local force_app = read_message("Fields[container_app]")
+    local force_task = read_message("Fields[container_task]")
+
     if programname == nil or programname == "" then return -1 end
 
     pat =
@@ -17,6 +21,17 @@ function process_message()
         "(%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x)$" -- task-id
 
     _, _, env, app, task = string.find(programname, pat)
+
+    -- override env, app, task if forced
+    if force_env and force_env ~= "" then
+      env = force_env
+    end
+    if force_app and force_app ~= "" then
+      app = force_app
+    end
+    if force_task and force_task ~= "" then
+      task = force_task
+    end
 
     if env and app and task then
         write_message("Fields[logtag]", ("%s--%s/%s"):format(env, app, task))
