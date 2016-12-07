@@ -64,12 +64,14 @@ end
 
 function process_message()
     -- Error if _kvmeta isn't set
-    local kvmeta = read_message("Fields[_kvmeta]")
-    if not kvmeta then return -1 end
+    local kvmeta_field = read_message("Fields[_kvmeta]")
+    if not kvmeta_field then return -1 end
 
-    -- Read routes off of message
-    local ok, routes = pcall(cjson.decode, kvmeta)
-    if not ok or not routes then return -1 end
+    local ok, kvmeta = pcall(cjson.decode, kvmeta_field)
+    if not ok or not kvmeta then return -1 end
+
+    local routes = kvmeta["routes"]
+    if not routes then return -1 end
     MAX_ROUTES = 10
     if #routes > MAX_ROUTES then return -1 end
 
