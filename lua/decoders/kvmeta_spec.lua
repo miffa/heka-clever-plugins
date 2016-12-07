@@ -19,19 +19,21 @@ describe("KV Decoder", function()
     mock_msg.Fields.custom_dim1 = "custom_value"
     mock_msg.Fields.custom_dim2 = "custom_value"
     mock_msg.Fields._kvmeta = cjson.encode({
-        {
-            rule="rule-1-alerts",
-            type="alerts",
-            series="series_1",
-            value="value_a",
-            dimensions={},
-        },
-        {
-            rule="rule-2-metrics",
-            type="metrics",
-            series="series_b",
-            dimensions={"custom_dim1", "custom_dim2"},
-        },
+        routes = {
+            {
+                rule="rule-1-alerts",
+                type="alerts",
+                series="series_1",
+                value="value_a",
+                dimensions={},
+            },
+            {
+                rule="rule-2-metrics",
+                type="metrics",
+                series="series_b",
+                dimensions={"custom_dim1", "custom_dim2"},
+            },
+        }
     })
 
     function test_setup()
@@ -53,7 +55,7 @@ describe("KV Decoder", function()
     it("should inject original message and remove _kvmeta field", function()
         test_setup()
         local msg = util.deepcopy(mock_msg)
-        msg.Fields._kvmeta = cjson.encode({})
+        msg.Fields._kvmeta = cjson.encode({routes={}})
         mocks.set_next_message(msg)
 
         assert.equals(0, process_message(), "process_message should succeed")
@@ -107,7 +109,7 @@ describe("KV Decoder", function()
         require 'kvmeta'
 
         local msg = util.deepcopy(mock_msg)
-        msg.Fields._kvmeta = cjson.encode({})
+        msg.Fields._kvmeta = cjson.encode({routes={}})
         mocks.set_next_message(msg)
 
         -- Test
