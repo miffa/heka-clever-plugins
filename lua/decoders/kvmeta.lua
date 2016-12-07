@@ -80,6 +80,15 @@ function process_message()
     --  * set msg.Type, if it was specified in the Decoder's config
     local msg = copy_message()
     msg.Fields["_kvmeta"] = nil
+    for k, v in pairs(kvmeta) do
+        -- Append metadata for everything except "routes".
+        -- We handle each route below.
+        -- This adds things like `kv_version` or `kv_language`.
+        if k ~= "routes" then
+            msg.Fields["_kvmeta."..k] = v
+        end
+    end
+
     if config.msg_type then msg.Type = config.msg_type end
 
     -- Inject original message, with type 'logs'
