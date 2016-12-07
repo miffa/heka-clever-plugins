@@ -28,10 +28,10 @@ $(ROCKSDIR)/busted:
 
 lua-tests: lua-deps # Run tests for lua-based plugins
 	@echo "Running tests for ./lua/filters"
-	@pushd ./lua/filters; busted .; popd
+	@pushd ./lua/filters; busted . && popd
 	@echo ""
 	@echo "Running tests for ./lua/decoders"
-	@pushd ./lua/decoders; busted .; popd
+	@pushd ./lua/decoders; busted . && popd
 	@echo ""
 	@echo "Running tests for ./lua/encoders"
-	@pushd ./lua/encoders; busted .; popd
+	@pushd ./lua/encoders; busted . && popd
