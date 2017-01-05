@@ -94,6 +94,17 @@ function process_message()
     -- Inject original message, with type 'logs'
     local msg_copy = deepcopy(msg)
     msg_copy.Fields["_kvmeta.type"] = 'logs'
+
+    rules = nil
+    for _, route in ipairs(routes) do
+        if rules then
+            rules = rules .. " " .. route["rule"]
+        else
+            rules = route["rule"]
+        end
+    end
+    msg_copy.Fields["_kvmeta.route-rules"] = rules
+
     inject_message(msg_copy)
 
     -- Inject one message for each valid route

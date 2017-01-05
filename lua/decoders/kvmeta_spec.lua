@@ -91,6 +91,7 @@ describe("KV Decoder", function()
         expected_msg1.Fields["_kvmeta.kv_version"] = "1.2.3"
         expected_msg1.Fields["_kvmeta.kv_language"] = "go"
         expected_msg1.Fields["_kvmeta.team"] = "eng-team"
+        expected_msg1.Fields["_kvmeta.route-rules"] = "rule-1-alerts rule-2-metrics"
         assert.same(expected_msg1, injected[1])
 
         expected_msg2 = util.deepcopy(mock_msg)
