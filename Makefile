@@ -16,9 +16,8 @@ LUAROCKS := /usr/bin/luarocks
 ROCKSDIR := /usr/local/lib/luarocks/rocks/
 endif
 
-# Go setup
+# Go setup -- only run "postgres" tests for now
 PKGS = $(shell GO15VENDOREXPERIMENT=1 go list ./... | grep -v "vendor/" | grep -v "db" | grep "postgres")
-$(eval $(call golang-version-check,1.7))
 
 test: lua-tests go-tests
 
