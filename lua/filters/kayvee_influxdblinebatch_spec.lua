@@ -114,7 +114,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         assert.equals("series-name,env=test,Hostname=hostname value=999.000000 2\n", actual_msg.data)
     end)
 
-    it("should default to 1 if value isn't found", function()
+    it("should default to 0 if value isn't found", function()
         -- Test setup
         test_setup()
         mock_msg_new = util.deepcopy(mock_msg)
@@ -127,7 +127,7 @@ describe("Kayvee Influxdbline Batch Filter", function()
         injected = mocks.injected_payloads()
         assert.equals(#injected, 1)
         actual_msg = injected[1]
-        assert.equals("series-name,env=test,Hostname=hostname value=1.000000 2\n", actual_msg.data)
+        assert.equals("series-name,env=test,Hostname=hostname value=0.000000 2\n", actual_msg.data)
     end)
 
     it("should read dimensions from specified field", function()

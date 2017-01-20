@@ -214,7 +214,7 @@ local function tags_fields_tables(config)
 
     -- Get value
     local value = read_field(read_field(config.value_ref_field))
-    if not value then value = 1 end
+    if not value then value = 0 end
     fields = { value = value }
 
     -- TAGS
