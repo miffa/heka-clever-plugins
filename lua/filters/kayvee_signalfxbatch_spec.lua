@@ -80,8 +80,8 @@ describe("Kayvee Signalfx Batch Filter", function()
         test_setup()
 
         local mock_gauge = util.deepcopy(mock_msg)
-        mock_msg.Fields.stat_type = "gauge"
-        mocks.set_next_message(mock_msg)
+        mock_gauge.Fields.stat_type = "gauge"
+        mocks.set_next_message(mock_gauge)
         assert.equals(0, process_message(), "Should process_message successfully")
         flush()
         injected = mocks.injected_payloads()
@@ -92,6 +92,58 @@ describe("Kayvee Signalfx Batch Filter", function()
             timestamp = 2,
             metric = "series-name",
             value = 100,
+            dimensions = {
+                Hostname = "hostname",
+                custom_dim="custom_value",
+            },
+        }
+        assert.same(decoded.gauge[1], expected_gauge)
+    end)
+
+    it("should default counter value to 1", function()
+        test_setup()
+
+        local mock_counter = util.deepcopy(mock_msg)
+        mock_counter.Fields.stat_type = "counter"
+        mock_counter.Fields.value = nil
+
+        mocks.set_next_message(mock_counter)
+        assert.equals(0, process_message(), "Should process_message successfully")
+        flush()
+        injected = mocks.injected_payloads()
+        assert.equals(#injected, 1, "There should be one Heka message injected")
+        decoded = cjson.decode(injected[1]["data"])
+        assert(decoded["gauge"] == nil, "Should have counter, and no gauges")
+        expected_counter = {
+            timestamp = 2,
+            metric = "series-name",
+            value = 1,
+            dimensions = {
+                Hostname = "hostname",
+                custom_dim="custom_value",
+            },
+        }
+        assert.same(decoded.counter[1], expected_counter)
+    end)
+
+    it("should default gauge value to 0", function()
+        test_setup()
+
+        local mock_gauge = util.deepcopy(mock_msg)
+        mock_gauge.Fields.stat_type = "gauge"
+        mock_gauge.Fields.value = nil
+
+        mocks.set_next_message(mock_gauge)
+        assert.equals(0, process_message(), "Should process_message successfully")
+        flush()
+        injected = mocks.injected_payloads()
+        assert.equals(#injected, 1, "There should be one Heka message injected")
+        decoded = cjson.decode(injected[1]["data"])
+        assert(decoded["counter"] == nil, "Should have counter, and no gauges")
+        expected_gauge = {
+            timestamp = 2,
+            metric = "series-name",
+            value = 0,
             dimensions = {
                 Hostname = "hostname",
                 custom_dim="custom_value",

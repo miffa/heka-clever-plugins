@@ -172,7 +172,6 @@ function process_message()
 
     -- Get value
     local value = read_field(read_field(config.value_ref_field))
-    if not value then return -1 end
 
     -- Get stat_type
     local stat_type = read_field(config.stat_type_field)
