@@ -20,6 +20,8 @@ function process_message()
         "arn%%3Aaws%%3Aecs%%3Aus%-west%-1%%3A589690932525%%3Atask%%2F".. -- ARN cruft
         "(%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x)$" -- task-id
 
+    -- support old docker format which starts with docker/
+    programname = string.gsub(programname, "docker/", "", 1)
     _, _, env, app, task = string.find(programname, pat)
 
     -- override env, app, task if forced
