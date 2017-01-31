@@ -152,6 +152,9 @@ func (f *FirehoseOutput) ProcessMessage(pack *pipeline.PipelinePack) error {
 		atomic.AddInt64(&f.droppedRecordCount, 1)
 		return err
 	}
+	// records ending in newlines will ensure the json objects written to
+	// firehose appear one per line
+	record = append(record, '\n')
 
 	// Send data to the batcher
 	f.batchChan <- MsgPack{record: record, queueCursor: pack.QueueCursor}
