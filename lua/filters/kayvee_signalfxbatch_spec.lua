@@ -159,9 +159,12 @@ describe("Kayvee Signalfx Batch Filter", function()
         test_setup('kayvee_signalfxbatch', cfg, mock_msg)
 
         local msg = util.deepcopy(mock_msg)
-        msg.Fields.dimensions= "custom_dim custom_dim_2"
-        msg.Fields.custom_dim = 123
-        msg.Fields.custom_dim_2 = true
+        msg.Fields.dimensions= "custom_dim_int custom_dim_float custom_dim_bool custom_dim_nil custom_dim_dne"
+        msg.Fields.custom_dim_int = 123
+        msg.Fields.custom_dim_float = 123.456
+        msg.Fields.custom_dim_bool = true
+        msg.Fields.custom_dim_nil = nil -- should be ignored
+        -- msg.Fields.custom_dim_object = { foo = "bar"} -- I hope this doesn't happen
 
         mocks.set_next_message(msg)
         assert.equals(0, process_message(), "Should process_message successfully")
@@ -177,8 +180,9 @@ describe("Kayvee Signalfx Batch Filter", function()
             dimensions = {
                 Hostname = "hostname",
                 value = "100",
-                custom_dim="123",
-                custom_dim_2="true",
+                custom_dim_int="123",
+                custom_dim_float="123.456",
+                custom_dim_bool="true",
             },
         }
         assert.same(expected_counter, decoded.counter[1])
