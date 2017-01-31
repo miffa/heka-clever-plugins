@@ -26,15 +26,16 @@ describe("Kayvee Signalfx Batch Filter", function()
     mock_msg.Fields.dimensions = "custom_dim"
     mock_msg.Fields.custom_dim = "custom_value"
 
-    function test_setup()
+    function test_setup(module_name, cfg, msg)
         mocks.reset()
-        mocks.set_config(mock_cfg)
-        require 'kayvee_signalfxbatch'
-        mocks.set_next_message(mock_msg)
+        mocks.set_config(cfg)
+        util.unrequire(module_name)
+        require(module_name)
+        mocks.set_next_message(msg)
     end
 
     it("should process and flush one message", function()
-        test_setup()
+        test_setup('kayvee_signalfxbatch', mock_cfg, mock_msg)
 
         assert.equals(0, process_message(), "Should process_message successfully")
         flush()
@@ -49,7 +50,7 @@ describe("Kayvee Signalfx Batch Filter", function()
     end)
 
     it("should process and flush a message with no dimensions", function()
-        test_setup()
+        test_setup('kayvee_signalfxbatch', mock_cfg, mock_msg)
 
         local msg = util.deepcopy(mock_msg)
         msg.Fields.dimensions = ""
@@ -65,7 +66,7 @@ describe("Kayvee Signalfx Batch Filter", function()
     end)
 
     it("should batch two messages", function()
-        test_setup()
+        test_setup('kayvee_signalfxbatch', mock_cfg, mock_msg)
 
         assert.equals(0, process_message(), "Should process_message successfully")
         assert.equals(0, process_message(), "Should process_message successfully")
@@ -77,7 +78,7 @@ describe("Kayvee Signalfx Batch Filter", function()
     end)
 
     it("should label gauges separately from counters", function()
-        test_setup()
+        test_setup('kayvee_signalfxbatch', mock_cfg, mock_msg)
 
         local mock_gauge = util.deepcopy(mock_msg)
         mock_gauge.Fields.stat_type = "gauge"
@@ -101,7 +102,7 @@ describe("Kayvee Signalfx Batch Filter", function()
     end)
 
     it("should default counter value to 1", function()
-        test_setup()
+        test_setup('kayvee_signalfxbatch', mock_cfg, mock_msg)
 
         local mock_counter = util.deepcopy(mock_msg)
         mock_counter.Fields.stat_type = "counter"
@@ -127,7 +128,7 @@ describe("Kayvee Signalfx Batch Filter", function()
     end)
 
     it("should default gauge value to 0", function()
-        test_setup()
+        test_setup('kayvee_signalfxbatch', mock_cfg, mock_msg)
 
         local mock_gauge = util.deepcopy(mock_msg)
         mock_gauge.Fields.stat_type = "gauge"
@@ -152,8 +153,43 @@ describe("Kayvee Signalfx Batch Filter", function()
         assert.same(decoded.gauge[1], expected_gauge)
     end)
 
+    it("should cast dimensions to strings", function()
+        local cfg = util.deepcopy(mock_cfg)
+        cfg.default_dimensions="Hostname value"
+        test_setup('kayvee_signalfxbatch', cfg, mock_msg)
+
+        local msg = util.deepcopy(mock_msg)
+        msg.Fields.dimensions= "custom_dim_int custom_dim_float custom_dim_bool custom_dim_nil custom_dim_dne"
+        msg.Fields.custom_dim_int = 123
+        msg.Fields.custom_dim_float = 123.456
+        msg.Fields.custom_dim_bool = true
+        msg.Fields.custom_dim_nil = nil -- should be ignored
+        -- msg.Fields.custom_dim_object = { foo = "bar"} -- I hope this doesn't happen
+
+        mocks.set_next_message(msg)
+        assert.equals(0, process_message(), "Should process_message successfully")
+        flush()
+        injected = mocks.injected_payloads()
+        assert.equals(#injected, 1, "There should be one Heka message injected")
+        decoded = cjson.decode(injected[1]["data"])
+        assert(decoded["gauge"] == nil, "Should have counter, and no gauges")
+        expected_counter = {
+            timestamp = 2,
+            metric = "series-name",
+            value = 100,
+            dimensions = {
+                Hostname = "hostname",
+                value = "100",
+                custom_dim_int="123",
+                custom_dim_float="123.456",
+                custom_dim_bool="true",
+            },
+        }
+        assert.same(expected_counter, decoded.counter[1])
+    end)
+
     it("should flush() messages on a timer_event", function()
-        test_setup()
+        test_setup('kayvee_signalfxbatch', mock_cfg, mock_msg)
 
         -- Test
         assert.equals(0, process_message(), "Should process_message successfully")
