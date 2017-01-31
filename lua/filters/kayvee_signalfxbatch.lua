@@ -136,7 +136,7 @@ local function get_dimensions(s)
     local dims = {}
     -- TODO: make sure matcher supports all possible field names
     for i in string.gmatch(s, "%S+") do
-        dims[i] = read_field(i)
+        dims[i] = tostring(read_field(i))
     end
     return dims
 end
