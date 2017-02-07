@@ -26,6 +26,25 @@ describe("Clever Container fields", function()
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
         mock_msg.Fields = {}
+        mock_msg.Fields.programname = "production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
+        mocks.set_next_message(mock_msg)
+
+        assert.equals(process_message(), 0, "Should process_message successfully")
+        written_messages = mocks.written_messages()
+
+        assert.equals("production--some-api/12345678-1234-1234-1234-1234567890ab", written_messages["Fields[logtag]"])
+        assert.equals("production", written_messages["Fields[container_env]"])
+        assert.equals("some-api", written_messages["Fields[container_app]"])
+        assert.equals("12345678-1234-1234-1234-1234567890ab", written_messages["Fields[container_task]"])
+    end)
+    it("Container fields are created from programname with `docker/` prefix ", function()
+        mocks.reset()
+        require 'clever_container_decoder'
+
+        local mock_msg= {}
+        mock_msg['Timestamp'] = 2000000
+        mock_msg['Hostname'] = "hostname"
+        mock_msg.Fields = {}
         mock_msg.Fields.programname = "docker/production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
         mocks.set_next_message(mock_msg)
 
@@ -45,7 +64,7 @@ describe("Clever Container fields", function()
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
         mock_msg.Fields = {}
-        mock_msg.Fields.programname = "docker/production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
+        mock_msg.Fields.programname = "production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
         mock_msg.Fields.container_env = "development"
         mocks.set_next_message(mock_msg)
 
@@ -65,7 +84,7 @@ describe("Clever Container fields", function()
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
         mock_msg.Fields = {}
-        mock_msg.Fields.programname = "docker/production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
+        mock_msg.Fields.programname = "production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
         mock_msg.Fields.container_app = "apiservice"
         mocks.set_next_message(mock_msg)
 
@@ -85,7 +104,7 @@ describe("Clever Container fields", function()
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
         mock_msg.Fields = {}
-        mock_msg.Fields.programname = "docker/production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
+        mock_msg.Fields.programname = "production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
         mock_msg.Fields.container_task = "abcd"
         mocks.set_next_message(mock_msg)
 
@@ -105,7 +124,7 @@ describe("Clever Container fields", function()
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
         mock_msg.Fields = {}
-        mock_msg.Fields.programname = "docker/production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
+        mock_msg.Fields.programname = "production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
         mock_msg.Fields.container_env = "development"
         mock_msg.Fields.container_app = "apiservice"
         mock_msg.Fields.container_task = "abcd"
@@ -127,7 +146,7 @@ describe("Clever Container fields", function()
         mock_msg['Timestamp'] = 2000000
         mock_msg['Hostname'] = "hostname"
         mock_msg.Fields = {}
-        mock_msg.Fields.programname = "docker/production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
+        mock_msg.Fields.programname = "production--some-api/arn%3Aaws%3Aecs%3Aus-west-1%3A589690932525%3Atask%2F12345678-1234-1234-1234-1234567890ab"
         mock_msg.Fields.container_env = ""
         mock_msg.Fields.container_app = ""
         mock_msg.Fields.container_task = ""
