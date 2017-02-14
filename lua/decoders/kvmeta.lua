@@ -75,6 +75,13 @@ function process_message()
     MAX_ROUTES = 10
     if #routes > MAX_ROUTES then return -1 end
 
+    -- For backwards compatilibity, ignore _kvmeta and set `Kayvee` type if no routes were emitted
+    if #routes == 0 then
+        write_message("Type", "Kayvee")
+        write_message("Fields[_kvmeta]", nil)
+        return 0
+    end
+
     -- Copy the message, so we can modify inject various routed versions of it.
     --  * `_kvmeta` routing info
     --  * set msg.Type, if it was specified in the Decoder's config
