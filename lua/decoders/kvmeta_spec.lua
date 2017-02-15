@@ -60,13 +60,21 @@ describe("KV Decoder", function()
         test_setup()
         local msg = util.deepcopy(mock_msg)
         local kvmeta = util.deepcopy(mock_kvmeta)
-        kvmeta.routes = {}
+        kvmeta.routes = {
+            {
+                rule="rule-1-alerts",
+                type="alerts",
+                series="series_1",
+                value="value_a",
+                dimensions={},
+            },
+        }
         msg.Fields._kvmeta = cjson.encode(kvmeta)
         mocks.set_next_message(msg)
 
         assert.equals(0, process_message(), "process_message should succeed")
         injected = mocks.injected_messages()
-        assert.equals(1, #injected, "Correct number of Heka messages were inserted")
+        assert.equals(2, #injected, "Correct number of Heka messages were inserted")
 
         expected_msg1 = util.deepcopy(msg)
         expected_msg1.Fields._kvmeta = nil
@@ -74,7 +82,20 @@ describe("KV Decoder", function()
         expected_msg1.Fields["_kvmeta.kv_version"] = "1.2.3"
         expected_msg1.Fields["_kvmeta.kv_language"] = "go"
         expected_msg1.Fields["_kvmeta.team"] = "eng-team"
+        expected_msg1.Fields["_kvmeta.route-rules"] = "rule-1-alerts"
         assert.same(expected_msg1, injected[1])
+
+        expected_msg2 = util.deepcopy(mock_msg)
+        expected_msg2.Fields._kvmeta = nil
+        expected_msg2.Fields["_kvmeta.rule"] = "rule-1-alerts"
+        expected_msg2.Fields["_kvmeta.type"] = "alerts"
+        expected_msg2.Fields["_kvmeta.series"] = "series_1"
+        expected_msg2.Fields["_kvmeta.value"] = "value_a"
+        expected_msg2.Fields["_kvmeta.dimensions"] = ""
+        expected_msg2.Fields["_kvmeta.kv_version"] = "1.2.3"
+        expected_msg2.Fields["_kvmeta.kv_language"] = "go"
+        expected_msg2.Fields["_kvmeta.team"] = "eng-team"
+        assert.same(expected_msg2, injected[2])
     end)
 
     it("should inject updated message for each rule in _kvmeta", function()
@@ -129,14 +150,22 @@ describe("KV Decoder", function()
 
         local msg = util.deepcopy(mock_msg)
         local kvmeta = util.deepcopy(mock_kvmeta)
-        kvmeta.routes = {}
+        kvmeta.routes = {
+            {
+                rule="rule-1-alerts",
+                type="alerts",
+                series="series_1",
+                value="value_a",
+                dimensions={},
+            },
+        }
         msg.Fields._kvmeta = cjson.encode(kvmeta)
         mocks.set_next_message(msg)
 
         -- Test
         assert.equals(0, process_message(), "process_message should succeed")
         injected = mocks.injected_messages()
-        assert.equals(1, #injected, "Correct number of Heka messages were inserted")
+        assert.equals(2, #injected, "Correct number of Heka messages were inserted")
 
         expected_msg1 = util.deepcopy(msg)
         expected_msg1.Fields._kvmeta = nil
@@ -144,8 +173,47 @@ describe("KV Decoder", function()
         expected_msg1.Fields["_kvmeta.kv_version"] = "1.2.3"
         expected_msg1.Fields["_kvmeta.kv_language"] = "go"
         expected_msg1.Fields["_kvmeta.team"] = "eng-team"
+        expected_msg1.Fields["_kvmeta.route-rules"] = "rule-1-alerts"
         expected_msg1.Type = "kvmeta"
         assert.same(expected_msg1, injected[1])
+
+        expected_msg2 = util.deepcopy(mock_msg)
+        expected_msg2.Fields._kvmeta = nil
+        expected_msg2.Fields["_kvmeta.rule"] = "rule-1-alerts"
+        expected_msg2.Fields["_kvmeta.type"] = "alerts"
+        expected_msg2.Fields["_kvmeta.series"] = "series_1"
+        expected_msg2.Fields["_kvmeta.value"] = "value_a"
+        expected_msg2.Fields["_kvmeta.dimensions"] = ""
+        expected_msg2.Fields["_kvmeta.kv_version"] = "1.2.3"
+        expected_msg2.Fields["_kvmeta.kv_language"] = "go"
+        expected_msg2.Fields["_kvmeta.team"] = "eng-team"
+        expected_msg2.Type = "kvmeta"
+        assert.same(expected_msg2, injected[2])
+
     end)
 
+    it("if no routes, should set message Type to 'Kayvee' for backwards compatibility", function()
+        -- Test setup
+        mocks.reset()
+        local cfg =  util.deepcopy(mock_cfg)
+        cfg['msg_type'] = 'kvmeta' -- we expect this to be set on the injected message
+        mocks.set_config(cfg)
+        util.unrequire('kvmeta')
+        require 'kvmeta'
+
+        local msg = util.deepcopy(mock_msg)
+        local kvmeta = util.deepcopy(mock_kvmeta)
+        kvmeta.routes = {}
+        msg.Fields._kvmeta = cjson.encode(kvmeta)
+        mocks.set_next_message(msg)
+
+        -- Test
+        assert.equals(0, process_message(), "process_message should succeed")
+        injected = mocks.injected_messages()
+        assert.equals(0, #injected, "Correct number of Heka messages were inserted")
+
+        written = mocks.written_messages()
+        assert.same("Kayvee", written["Type"])
+        assert.same("__REMOVED_FIELD__", written["Fields[_kvmeta]"])
+    end)
 end)
