@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/firehose"
 	iface "github.com/aws/aws-sdk-go/service/firehose/firehoseiface"
 
@@ -27,9 +28,9 @@ type Firehose struct {
 
 // NewFirehose returns a configured Firehose object
 func NewFirehose(region, stream string) *Firehose {
-	awsConfig := aws.NewConfig().WithRegion(region)
+	sess := session.Must(session.NewSession(aws.NewConfig().WithRegion(region)))
 	return &Firehose{
-		client: firehose.New(awsConfig),
+		client: firehose.New(sess),
 		stream: stream,
 	}
 }
