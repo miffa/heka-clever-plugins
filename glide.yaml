@@ -1,7 +1,0 @@
-package: github.com/Clever/heka-clever-plugins
-import:
-- package: github.com/lib/pq
-testImport:
-- package: github.com/stretchr/testify
-  subpackages:
-  - assert
