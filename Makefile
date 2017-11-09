@@ -43,11 +43,6 @@ lua-tests: lua-deps # Run tests for lua-based plugins
 	@echo "Running tests for ./lua/encoders"
 	@pushd ./lua/encoders; busted . && popd
 
-
-# install go deps with glide
-go-deps: $(GOPATH)/bin/glide
-	@$(GOPATH)/bin/glide install
-
 go-tests: $(PKGS)
 $(PKGS): golang-test-all-deps
 	$(call golang-test-all,$@)
